@@ -19,3 +19,9 @@ Build/*
 /Deterministic/Old
 /TE/te
 /TE/Runs/0-*
+
+*.o
+*.so
+*.dll
+*.d
+*.d.x
