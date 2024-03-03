@@ -1,0 +1,49 @@
+EXE := ./determ
+CPP := g++
+SRCDIR := .
+SRC := $(wildcard $(SRCDIR)/*.cpp)
+OBJDIR := ./Build
+OBJ := $(addprefix $(OBJDIR)/,$(notdir $(SRC:.cpp=.o)))
+DEP := $(OBJDIR)/depend.d
+DEPSRC := $(wildcard $(SRCDIR)/*.cpp) $(wildcard $(SRCDIR)/*.h) $(wildcard $(SRCDIR)/*.hpp)
+LANG = -std=c++14
+CFLAGS := -c -O3 -W -Wall -Werror
+IFLAGS := -isystem /usr/local/include
+LFLAGS := -llua -L /usr/local/lib
+
+ifeq ($(DEBUG),1)
+ CFLAGS := $(filter-out -s -fomit-frame-pointer -O3, $(CFLAGS)) -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -ggdb -DDEBUG
+ LFLAGS := $(LFLAGS) -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -ggdb
+endif
+
+ifeq ($(PROFILE),1)
+ CFLAGS := $(filter-out -s -fomit-frame-pointer, $(CFLAGS)) -pg
+ LFLAGS := $(LFLAGS) -pg
+endif
+
+ifeq ($(NO_OPT),1)
+ CFLAGS := $(filter-out -O3, $(CFLAGS))
+endif
+
+.PHONY: clean veryclean
+
+default: $(DEP) $(OBJ) $(EXE)
+
+$(DEP): $(DEPSRC)
+	g++ -MM $(LANG) $(IFLAGS) $(SRC) > $(DEP).x
+	sed -e "s/\([a-zA-Z0-9_]*\.o:\)/$(subst /,\/,$(OBJDIR)/)\1/" $(DEP).x > $(DEP)
+
+-include $(DEP)
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp
+	$(CPP) -o $@ $(CFLAGS) $(LANG) $(IFLAGS) $<
+
+$(EXE): $(OBJ)
+	$(CPP) -o $(EXE) $(OBJ) $(LFLAGS)
+
+clean:
+	$(RM) $(OBJ) $(DEP) $(DEP).x
+
+veryclean: clean
+	$(RM) $(EXE)
+

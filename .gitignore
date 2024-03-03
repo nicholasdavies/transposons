@@ -1,0 +1,21 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Rdata
+.httr-oauth
+.DS_Store
+
+/*.docx
+/Figures/
+/Old/
+/Readings/
+/Transposon library.Data/
+/Transposon Library.enl
+
+Build/*
+!Build/.gitkeep
+/Deterministic/determ
+/Deterministic/Old
+/TE/te
+/TE/Runs/0-*

@@ -1,0 +1,28 @@
+# NGD2
+
+# usage: Viewer viewcost.ngd:otherfile.ngd
+
+{PLOT}
+plot:name=View, w=1600, h=1200
+style:typeface=News Gothic MT, font_size=30, x_label_dist=40, y_label_dist=60, number_size=20, margins=0, tic_length=-6, stroke_width=1.5
+style:sampling=5, smooth=false
+
+# plot copy number, duplication rate, and host fitness
+axes:0:x=90,y=890,w=1100,h=300,x_label=Generations,x_min=0,x_max=20000,y_label=Duplication rate,y_min=0
+axes:2:x=90,y=490,w=1100,h=300,x_label=Generations,x_min=0,x_max=20000,y_label=Transposon number,y_min=0
+axes:4:x=90,y=90,w=1100,h=300,x_label=Generations,x_min=0,x_max=20000,y_label=Host fitness,y_min=0
+
+# PLOTS
+ribbon2:*:g:u05:u95:x_axis=0,y_axis=1,fill=#88ff88
+line:*:g:u:x_axis=0,y_axis=1,stroke=#008800
+
+ribbon2:*:g:n05:n95:x_axis=2,y_axis=3,fill=#ff8888
+line:*:g:n:x_axis=2,y_axis=3,stroke=#880000
+
+ribbon2:*:g:w05:w95:x_axis=4,y_axis=5,fill=#ff88ff
+line:*:g:w:x_axis=4,y_axis=5,stroke=#880088
+
+# SUMMARIES
+labelavg:avg*:u:320:420:x=1250,y=1050,fill=#008800,x_align=left, before=u =
+labelavg:avg*:n:320:420:x=1250,y=650,fill=#880000,x_align=left, before=n =
+labelavg:avg*:w:320:420:x=1250,y=250,fill=#880088,x_align=left, before=w =

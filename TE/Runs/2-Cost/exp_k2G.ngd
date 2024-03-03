@@ -1,0 +1,122 @@
+# NGD2
+
+# N                  = 5000                     // int, default = 100
+# generations        = 21000                    // int, default = 1000
+# reps               = 3                        // int, default = 1
+# n_sites            = 100000                   // int, default = 31
+# ploidy             = 2                        // int, default = 2
+# haploid_N          = 2                        // int, default = 2
+# chromosome_length  = 0.9                      // double, default = 0.9
+# chiasma_cmf        =                          // vector<double>, default = vector<double>{}
+# sexuality          = 1                        // double, default = 1.0
+# selfing            = 0                        // double, default = 0.0
+# extinction_threshold = 1e-06                    // double, default = 0.0
+# halt_on_clearance  = true                     // bool, default = false
+# halt_on_n_max      = true                     // bool, default = false
+# te_overwrite       = false                    // bool, default = true
+# initial_elements   = 5                        // double, default = 10
+# n_max              = 10000                    // int, default = 0
+# zygosity           = true                     // bool, default = false
+# site_classes       = 1                        // int, default = 1
+# site_pattern       = 0                        // vector<int>, default = vector<int>{0}
+# families           = 2                        // vector<int>, default = vector<int>{2}
+# u0                 = 0.005                    // double, default = 0.01
+# u_mut_rate         = 0.01                     // double, default = 0.0
+# u_mut_rate_on_copy = 0                        // double, default = 0.0
+# u_mut_spread       = 0.001                    // vector<double>, default = vector<double>{0.0}
+# u_mut_spread_relative = 0.05                     // vector<double>, default = vector<double>{0.0}
+# u_min              = 0                        // double, default = 0.0
+# u_max              = 1e+300                   // double, default = 5.0
+# U                  = u, S -> u                // LuaFunction<double>, default = "u, S -> u"
+# par_hs             = 1                        // double, default = 1.0
+# par_pref           = 0.5                      // double, default = 0.5
+# v                  = 0.0005                   // double, default = 0.005
+# s0                 = 0                        // vector<double>, default = vector<double>{0.0}
+# s_mut_rate         = 0                        // vector<double>, default = vector<double>{0.0}
+# s_mut_spread       = 0                        // vector<double>, default = vector<double>{0.0}
+# s_mut_spread_relative = 0                        // vector<double>, default = vector<double>{0.0}
+# s_min              = 0                        // vector<double>, default = vector<double>{0.0}
+# s_max              = 1                        // vector<double>, default = vector<double>{1.0}
+# w                  = nh,ng,S,a -> 1-0.00000006*2000000000*a // LuaFunction<double>, default = "n, S, a -> 1 - 0.001 * n ^ 1.5"
+# gen_coevolution    = 1000                     // int, default = 0
+# invasions          =                          // vector<double>, default = vector<double>{}
+# do_checksum        = false                    // bool, default = false
+# expected_checksum  =                          // string, default = ""
+# check              = false                    // bool, default = false
+# test               = false                    // bool, default = false
+# fileout            = ./Runs/2-Cost/exp_k2G.ngd // string, default = "output.ngd"
+# report_freq        = 50                       // int, default = 1
+
+{PLOT}
+plot:name=Overview
+axes:0:y_min=0,x=0,y=250,w=480,h=250,y_label=Transposon abundance
+ribbon2:*:g:n05:n95:fill=$jet,x_axis=0
+line:*:g:n:stroke=#000000,x_axis=0
+axes:2:y_min=0,x=0,y=0,w=480,h=250,y_label=Duplication rate
+ribbon2:*:g:u05:u95:fill=$greens,x_axis=2
+line:*:g:u:stroke=#000000,x_axis=2
+axes:4:y_min=0,x=480,y=250,w=480,h=250,y_label=Suppression
+ribbon2:*:g:S05:S95:fill=$reds,x_axis=4
+line:*:g:S:stroke=#000000,x_axis=4
+axes:6:y_min=0,y_max=1,x=480,y=0,w=480,h=250,y_label=Fitness
+ribbon2:*:g:w05:w95:fill=$blues,x_axis=6
+line:*:g:w:stroke=#000000,x_axis=6
+{PLOT}
+plot:name=Abundance
+axes:0:y_label=Transposon abundance,y_min=0
+ribbon2:*:g:n05:n95:fill=$jet
+line:*:g:n:stroke=#000000
+{PLOT}
+plot:name=Duplication rate
+axes:0:y_label=Duplication rate,y_min=0
+ribbon2:*:g:u05:u95:fill=$greens
+line:*:g:u:stroke=#000000
+{PLOT}
+plot:name=Adjusted duplication rate
+axes:0:y_label=Adjusted duplication rate,y_min=0
+ribbon2:*:g:U05:U95:fill=$greens
+line:*:g:U:stroke=#000000
+{PLOT}
+plot:name=Suppression
+axes:0:y_label=Suppression,y_min=0
+ribbon2:*:g:S05:S95:fill=$reds
+line:*:g:S:stroke=#000000
+{PLOT}
+plot:name=Activity
+axes:0:y_min=0,y_label=Activity
+ribbon2:*:g:a05:a95:fill=$greys
+line:*:g:a:stroke=#000000
+{PLOT}
+plot:name=Fitness
+axes:0:y_min=0,y_max=1,x=0,y=250,w=960,h=250,y_label=Fitness / Dead
+ribbon2:*:g:w05:w95:fill=$blues,x_axis=0
+line:*:g:w:stroke=#000000,x_axis=0
+line:*:g:d:stroke=#ff0000,x_axis=0
+axes:2:y_min=0,y_max=1,x=0,y=0,w=960,h=250,y_label=Host fitness
+ribbon2:*:g:x05:x95:fill=$blues,x_axis=2
+line:*:g:x:stroke=#000000,x_axis=2
+{PLOT}
+plot:name=Stats
+axes:0:y_min=0,y_max=1,x=0,y=250,w=480,h=250,y_label=Homozygosity
+line:*:g:G:stroke=#666666,x_axis=0
+axes:2:y_min=0,x=0,y=0,w=480,h=250,y_label=Var(n)/n
+line:*:g:Vn/n:stroke=#cc6600,x_axis=2
+axes:4:y_min=0,x=480,y=250,w=480,h=250,y_label=-BuW
+line:*:g:-BuW:stroke=#008888,x_axis=4
+axes:6:y_min=0,x=480,y=0,w=480,h=250,y_label=Bun
+line:*:g:Bun:stroke=#880000,x_axis=6
+{DATA}
+g	n	Vn	n05	n95	u	Vu	u05	u95	U	VU	U05	U95	a	Va	a05	a95	S	VS	S05	S95	w	Vw	w05	w95	x	Vx	x05	x95	d	G	BuW	Bun	nh	Vnh	nh05	nh95	ng	Vng	ng05	ng95
+0	4.992	5.0259360000000015	1.9742564031473697	9.0009604881211533	0.0049999999999983565	2.4875663594964292e-17	0.0050000000000000001	0.0050000000000000001	0.0049999999999983565	2.4875663594964292e-17	0.0049999999999999975	0.005000000000000001	0.024960000000000468	0.00012564839999995635	0.0098712820157368462	0.04500480244060575	0	0	0	0	0.023600000000000069	0.014883039999999931	1.5775387898959395e-69	0.035942067011455289	0.11543893959148144	1.9432660476917802	1.5401711804941118e-65	4.8498055214024112e-08	0.95599999999999996	0	0	0	4.992	5.0259360000000015	1.9742564031473697	9.0009604881211533	0	0	0	0
+13	0	0	0	0	nan	nan	0	0	nan	nan	0	0	0	0	0	0	0	0	0	0	1	0	1	1	nan	nan	1	1	0	nan	nan	nan	0	0	0	0	0	0	0	0
+
+{DATA}
+g	n	Vn	n05	n95	u	Vu	u05	u95	U	VU	U05	U95	a	Va	a05	a95	S	VS	S05	S95	w	Vw	w05	w95	x	Vx	x05	x95	d	G	BuW	Bun	nh	Vnh	nh05	nh95	ng	Vng	ng05	ng95
+0	4.9702000000000002	4.8165119599999997	1.9648703070539368	8.9839227718725905	0.0049999999999983695	2.4553791075007658e-17	0.0050000000000000001	0.0050000000000000001	0.0049999999999983695	2.4553791075007658e-17	0.0049999999999999992	0.005000000000000001	0.024851000000000473	0.00012041279899995688	0.0098243515352696726	0.044919613859362918	0	0	0	0	0.02128000000000007	0.012859161599999929	1.6132535162729287e-69	0.013514161980203283	0.12556036987967015	2.3443919220809075	6.3296910379288925e-71	1.8250317589322171e-07	0.95879999999999999	0	0	0	4.9702000000000002	4.8165119599999997	1.9648703070539368	8.9839227718725905	0	0	0	0
+11	0	0	0	0	nan	nan	0	0	nan	nan	0	0	0	0	0	0	0	0	0	0	1	0	1	1	nan	nan	1	1	0	nan	nan	nan	0	0	0	0	0	0	0	0
+
+{DATA}
+g	n	Vn	n05	n95	u	Vu	u05	u95	U	VU	U05	U95	a	Va	a05	a95	S	VS	S05	S95	w	Vw	w05	w95	x	Vx	x05	x95	d	G	BuW	Bun	nh	Vnh	nh05	nh95	ng	Vng	ng05	ng95
+0	5.0098000000000003	5.0289039599999974	1.9501854860640939	9.0038478183506729	0.004999999999998346	2.5139937874507634e-17	0.0050000000000000001	0.0050000000000000001	0.004999999999998346	2.5139937874507634e-17	0.0049999999999999992	0.005000000000000001	0.025049000000000415	0.00012572259899995932	0.009750927430320468	0.045019239091753378	0	0	0	0	0.019120000000000029	0.010402425599999961	9.7227749759498789e-66	0.018281565436714307	0.14532186370780176	3.0190879096481948	6.2779149187481093e-77	1.3812308003518902e-06	0.95999999999999996	0	0	0	5.0098000000000003	5.0289039599999974	1.9501854860640939	9.0038478183506729	0	0	0	0
+12	0	0	0	0	nan	nan	0	0	nan	nan	0	0	0	0	0	0	0	0	0	0	1	0	1	1	nan	nan	1	1	0	nan	nan	nan	0	0	0	0	0	0	0	0
+
