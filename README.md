@@ -1,7 +1,8 @@
 # The tragedy of the transposons
+
 Code and data for manuscript by Nicholas G. Davies, J. Arvid Ågren, Kevin R. Foster.
 
-# Guide to the repository
+## Guide to the repository
 
 `Cost-Benefit/` contains intermediate files processed by `cost_benefit_load.R` from data files in `Deterministic/Runs/4-Analysis/`.
 
