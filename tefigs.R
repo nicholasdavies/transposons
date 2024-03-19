@@ -148,13 +148,13 @@ ggsave("./Figures/1-tragedy-plots.png", f2, width = 20, height = 8, units = "cm"
 # FIGURE 3 #
 ############
 
-# 22 July 2022 - NEW files
+# Load files
 s1 = load_ngd("./TE/Runs/5-Parasite/parasite_com_phi090_len05_u01.ngd");
 s2 = load_ngd("./TE/Runs/5-Parasite/parasite_com_phi100_len05_u01.ngd");
 s3 = load_ngd("./TE/Runs/3-Suppression/csupp_GN_co7_k100.ngd");
 s4 = load_ngd("./TE/Runs/3-Suppression/csupp_GP_co7_k100.ngd");
 
-# Process NEW files
+# Process files
 s1[, n0 := nh0 + ng0]
 s1[, n005 := nh005 + ng005]
 s1[, n095 := nh095 + ng095]
@@ -186,6 +186,11 @@ s4[, s := S / (10 + S)]
 s4[, s05 := S05 / (10 + S05)]
 s4[, s95 := S95 / (10 + S95)]
 
+# For plotting
+s3[, U05 := pmax(U05, 1e-3)]
+s4[, U05 := pmax(U05, 1e-3)]
+
+
 
 f4a = plot_grid(
     panel(list(s1, s1), c("n0", "n1"), c("n005", "n105"), c("n095", "n195"), 
@@ -207,22 +212,23 @@ f4b = plot_grid(
 
 f4c = plot_grid(
     panel(s3, "n", "n05", "n95",
-        c(0, 2000), cTE1, ylab = "Copy\nnumber", title = "Suppressing genes", xlim = c(0, 40)),
-    panel(s3, "u", "u05", "u95", c(0, 0.265), cAct, ylab = "Transposon\nactivity", xlim = c(0, 40)) + 
+        c(0, 2000), cTE1, ylab = "Copy\nnumber", title = "Transcriptional", xlim = c(0, 40)),
+    panel(list(s3, s3), c("U", "u"), c("U05", "u05"), c("U95", "u95"), c(0, 0.265), c(cAct, cDup), ylab = "Duplication\nrate", xlim = c(0, 40)) + 
         scale_y_log10(limits = c(1e-3, 1e4), breaks = c(1e-2, 1, 1e2, 1e4), labels = trans_format("log10", math_format(10^.x))),
     panel(s3, "s", "s05", "s95", c(0, 1), cSuf, ylab = "Suppressed\nfraction", xlim = c(0, 40)),
     panel(s3, "w", "w05", "w95", c(0, 1), cFit, ylab = "Host\nfitness", xlab = " ", xlim = c(0, 40)),
-    ncol = 1, align = "v", axis = "b", rel_heights = c(1.5, 1, 1, 1.2))
+    ncol = 1, align = "v", axis = "b", rel_heights = c(1.5, 1, 1, 1.2)) +
+    draw_label("suppression", x = 0.58, y = 0.938, hjust = 0.5, vjust = 0.5, size = 8, color = "#000000")
 
 f4d = plot_grid(
     panel(s4, "n", "n05", "n95",
-        c(0, 1000), cTE1, ylab = NULL, title = "Suppressing gene", xlim = c(0, 40)),
-    panel(s4, "u", "u05", "u95", c(0, 0.265), cAct, ylab = NULL, xlim = c(0, 40)) + 
+        c(0, 1000), cTE1, ylab = NULL, title = "Post-transcriptional", xlim = c(0, 40)),
+    panel(list(s4, s4), c("U", "u"), c("U05", "u05"), c("U95", "u95"), c(0, 0.265), c(cAct, cDup), ylab = NULL, xlim = c(0, 40)) + 
         scale_y_log10(limits = c(1e-3, 1e4), breaks = c(1e-2, 1, 1e2, 1e4), labels = trans_format("log10", math_format(10^.x))),
     panel(s4, "s", "s05", "s95", c(0, 1), cSuf, ylab = NULL, xlim = c(0, 40)),
     panel(s4, "w", "w05", "w95", c(0, 1), cFit, ylab = NULL, xlab = " ", xlim = c(0, 40)),
     ncol = 1, align = "v", axis = "b", rel_heights = c(1.5, 1, 1, 1.2)) +
-    draw_label("products", x = 0.58, y = 0.938, hjust = 0.5, vjust = 0.5, size = 8, color = "#000000")
+    draw_label("suppression", x = 0.58, y = 0.938, hjust = 0.5, vjust = 0.5, size = 8, color = "#000000")
 
 f4 = plot_grid(f4a, NULL, f4b, NULL, f4c, NULL, f4d, 
     nrow = 1, labels = c("B", "", "C", "", "E", "", "F"), label_size = 8, rel_widths = c(1.18, 0.073, 1, 0.291, 1.18, 0.073, 1)) + 
@@ -268,15 +274,21 @@ load_parasites = function(len, u)
 
 paraplot = function(s, title, xmax = NA)
 {
+    xadj = function()
+        list(
+            scale_x_continuous(limits = c(0, xmax), expand = expansion(0, 0)),
+            theme(panel.spacing = unit(0.7, "lines"), plot.margin = margin(4, 6, 4, 3, unit = "pt"))
+        )
+    
     plot_grid(
         panel(list(s, s), c("n0", "n1"), c("n005", "n105"), c("n095", "n195"), 
-            c(0, 2000), c(cTE1, cTE5), ylab = "Copy\nnumber", title = title) + facet_wrap(~paste0("italic(p)==", tag), nrow = 1, labeller = label_parsed) + xlim(0, xmax),
+            c(0, 2000), c(cTE1, cTE5), ylab = "Copy\nnumber", title = title) + facet_wrap(~paste0("italic(p)==", tag), nrow = 1, labeller = label_parsed) + xadj(),
         panel(s, "u0", "u005", "u095", c(0, 0.3), cDup, ylab = "Duplication\nrate") + facet_wrap(~paste0("p=", tag), nrow = 1) +
-            theme(strip.background = element_blank(), strip.text = element_blank()) + xlim(0, xmax),
+            theme(strip.background = element_blank(), strip.text = element_blank()) + xadj(),
         panel(s, "p", "p05", "p95", c(0, 1), cPaf, ylab = "Parasitized\nfraction") + facet_wrap(~paste0("p=", tag), nrow = 1) +
-            theme(strip.background = element_blank(), strip.text = element_blank()) + xlim(0, xmax),
+            theme(strip.background = element_blank(), strip.text = element_blank()) + xadj(),
         panel(s, "w", "w05", "w95", c(0, 1), cFit, ylab = "Host\nfitness", xlab = "Generations (thousands)") + facet_wrap(~paste0("p=", tag), nrow = 1) +
-            theme(strip.background = element_blank(), strip.text = element_blank()) + xlim(0, xmax),
+            theme(strip.background = element_blank(), strip.text = element_blank()) + xadj(),
         ncol = 1, align = "v", axis = "b", rel_heights = c(1.5, 1, 0.85, 1))
 }
 
@@ -329,14 +341,20 @@ load_supps = function(type, cost, prefix = "csupp")
 
 supp_plot = function(s, title, nlim = c(0, 2000), alog = TRUE, alim = c(1e-3, 2e4), abreaks = c(1e-2, 1, 1e2, 1e4))
 {
+    xadj = function()
+        list(
+            scale_x_continuous(limits = c(0, 50), expand = expansion(c(0.02, 0), 0)),
+            theme(panel.spacing = unit(0.7, "lines"), plot.margin = margin(4, 6, 4, 3, unit = "pt"))
+        )
+    
     plot_grid(
         panel(s, "n", "n05", "n95", 
             nlim, cTE1, ylab = "Copy\nnumber", title = title, xlim = c(0, 50)) + 
             facet_wrap(~paste0("italic(k)==",tag), nrow = 1, labeller = label_parsed) +
-            theme(axis.text.x = element_blank()),
-        panel(s, "u", "u05", "u95", c(0, 1), cAct, ylab = "Transposon\nactivity", xlim = c(0, 50)) + 
+            theme(axis.text.x = element_blank()) + xadj(),
+        panel(list(s, s), c("U", "u"), c("U05", "u05"), c("U95", "u95"), c(0, 1), c(cAct, cDup), ylab = "Duplication\nrate", xlim = c(0, 50)) + 
             facet_wrap(~tag, nrow = 1) +
-            theme(strip.background = element_blank(), strip.text = element_blank(), axis.text.x = element_blank()) +
+            theme(strip.background = element_blank(), strip.text = element_blank(), axis.text.x = element_blank()) + xadj() +
             if (alog) {
                 scale_y_log10(limits = alim, breaks = abreaks, labels = trans_format("log10", math_format(10^.x)))
             } else {
@@ -344,10 +362,10 @@ supp_plot = function(s, title, nlim = c(0, 2000), alog = TRUE, alim = c(1e-3, 2e
             },
         panel(s, "s", "s05", "s95", c(0, 1), cSuf, ylab = "Suppressed  \nfraction", xlim = c(0, 50)) + 
             facet_wrap(~tag, nrow = 1) +
-            theme(strip.background = element_blank(), strip.text = element_blank(), axis.text.x = element_blank()),
+            theme(strip.background = element_blank(), strip.text = element_blank(), axis.text.x = element_blank()) + xadj(),
         panel(s, "w", "w05", "w95", c(0, 1), cFit, ylab = "Host\nfitness", xlab = "Generations (thousands)", xlim = c(0, 50)) + 
             facet_wrap(~tag, nrow = 1) +
-            theme(strip.background = element_blank(), strip.text = element_blank()),
+            theme(strip.background = element_blank(), strip.text = element_blank()) + xadj(),
         ncol = 1, align = "v", axis = "b", rel_heights = c(1.4, 0.9, 0.75, 1.1))
 }
 
@@ -359,17 +377,26 @@ sP7 = load_supps("GP", "7")
 sP6 = load_supps("GP", "6")
 sP5 = load_supps("GP", "5")
 
+# For plotting
+sN7[, U05 := pmax(U05, 1e-3)]
+sN6[, U05 := pmax(U05, 1e-3)]
+sN5[, U05 := pmax(U05, 1e-3)]
+
+sP7[, U05 := pmax(U05, 1e-3)]
+sP6[, U05 := pmax(U05, 1e-3)]
+sP5[, U05 := pmax(U05, 1e-3)]
+
 fsuppPr1 = plot_grid(
-    supp_plot(sN7, expression("Gene suppression, suppression cost = 10"^-7)),
-    supp_plot(sN6, expression("Gene suppression, suppression cost = 10"^-6)),
-    supp_plot(sN5, expression("Gene suppression, suppression cost = 10"^-5)),
+    supp_plot(sN7, expression("Transcriptional suppression, suppression cost = 10"^-7)),
+    supp_plot(sN6, expression("Transcriptional suppression, suppression cost = 10"^-6)),
+    supp_plot(sN5, expression("Transcriptional suppression, suppression cost = 10"^-5)),
     nrow = 3, ncol = 1, labels = LETTERS[1:3], label_size = 8
 )
 
 fsuppPr2 = plot_grid(
-    supp_plot(sP7, expression("Gene product suppression, suppression cost = 10"^-7)),
-    supp_plot(sP6, expression("Gene product suppression, suppression cost = 10"^-6)),
-    supp_plot(sP5, expression("Gene product suppression, suppression cost = 10"^-5)),
+    supp_plot(sP7, expression("Post-transcriptional suppression, suppression cost = 10"^-7)),
+    supp_plot(sP6, expression("Post-transcriptional suppression, suppression cost = 10"^-6)),
+    supp_plot(sP5, expression("Post-transcriptional suppression, suppression cost = 10"^-5)),
     nrow = 3, ncol = 1, labels = LETTERS[1:3], label_size = 8
 )
 
@@ -388,8 +415,8 @@ spP = load_supps("GP", "5", "pubsupp")
 
 fsuppPu = plot_grid(
     supp_plot(sp0, expression("No suppression"), nlim = c(0, 350), alog = FALSE, alim = c(0, 0.02), abreaks = waiver()),
-    supp_plot(spN, expression("Gene suppression, cost = 10"^-5), nlim = c(0, 350), alog = FALSE, alim = c(0, 0.02), abreaks = waiver()),
-    supp_plot(spP, expression("Gene product suppression, cost = 10"^-5), nlim = c(0, 350), alog = FALSE, alim = c(0, 0.02), abreaks = waiver()),
+    supp_plot(spN, expression("Transcriptional suppression, cost = 10"^-5), nlim = c(0, 350), alog = FALSE, alim = c(0, 0.02), abreaks = waiver()),
+    supp_plot(spP, expression("Post-transcriptional suppression, cost = 10"^-5), nlim = c(0, 350), alog = FALSE, alim = c(0, 0.02), abreaks = waiver()),
     nrow = 3, ncol = 1, labels = LETTERS[1:6], label_size = 8
 )
 
@@ -439,3 +466,4 @@ pp = cowplot::plot_grid(pA, pB, pC, ncol = 1, labels = LETTERS[1:3], label_size 
 
 ggsave("./Figures/S-dongroth.pdf", pp, width = 8, height = 16, units = "cm", useDingbats = FALSE)
 ggsave("./Figures/S-dongroth.png", pp, width = 8, height = 16, units = "cm")
+
