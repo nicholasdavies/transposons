@@ -392,6 +392,14 @@ void Population::SpecialUpdate()
                             // Here, all the old B-type TEs get cast as A-type TEs, and only the incremental B-type is cast as a B-type
                             f_temp[aj + bj][bs] += f[ai][bi] * PoissonPMF(ua * ai, aj - ai) * PoissonPMF(ub * bi, bj - bi) * BinomialPMF(bi, ubp, bs);
                         }
+                        else if (P.analysis_special_focus == "par")
+                        {
+                            // Here, the mutant genome-mates of any incremental B-type transposons get cast as B-types; all others cast as A-types
+                            if (bs == 0)
+                                f_temp[aj + bj][0] += f[ai][bi] * PoissonPMF(ua * ai, aj - ai) * PoissonPMF(ub * bi, bj - bi) * BinomialPMF(bi, ubp, bs);
+                            else
+                                f_temp[aj + bs][bj] += f[ai][bi] * PoissonPMF(ua * ai, aj - ai) * PoissonPMF(ub * bi, bj - bi) * BinomialPMF(bi, ubp, bs);
+                        }
                         else
                         {
                             throw std::runtime_error("Unrecognized analysis_special_focus string.\n");

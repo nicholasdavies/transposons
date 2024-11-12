@@ -381,7 +381,7 @@ Rcpp::NumericVector eq_mut(
 
 
 // [[Rcpp::export]]
-Rcpp::NumericVector Ns(Rcpp::NumericMatrix f, double u, double delta = 1e-4)
+Rcpp::NumericVector Ns(Rcpp::NumericMatrix f, double u, double delta = 1e-4, bool m12 = false)
 {
     double N0_n = 0.0,      N0_d = 0.0;
     double NPar1_n = 0.0,   NPar1_d = 0.0;
@@ -390,7 +390,7 @@ Rcpp::NumericVector Ns(Rcpp::NumericMatrix f, double u, double delta = 1e-4)
     
     for (unsigned int n = 0; n < 100; ++n)
     {
-        for (unsigned int m = 1; m < 100 - n; ++m)
+        for (unsigned int m = 1; m < (m12 ? 3 : 100 - n); ++m)
         {
             for (unsigned int i = 0; i < 25; ++i)
             {

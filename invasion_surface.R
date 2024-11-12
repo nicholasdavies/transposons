@@ -5,6 +5,8 @@ source("./cost_benefit_load.R")
 library(ggarchery)
 library(ggpattern)
 library(scales)
+library(cowplot)
+theme_set(theme_cowplot(font_size = 8) + theme(plot.title = element_text(size = 8, face = "plain")))
 
 
 
@@ -19,10 +21,10 @@ library(scales)
 fitness = fread("./fitness.csv")
 
 # Load evolution thresholds
-private_thresh = fread("./private_thresh.csv")
-rna_thresh = fread("./rna_thresh.csv")
-public_thresh = fread("./public_thresh.csv")
-dna_thresh = fread("./dna_thresh.csv")
+private_thresh = fread("./private_thresh.csv")   # analytical solutions, though some involve numerically solving for equilibrium n and W
+rna_thresh = fread("./rna_thresh.csv")           # numerical solutions
+public_thresh = fread("./public_thresh.csv")     # analytical solutions, though some involve numerically solving for equilibrium n and W
+dna_thresh = fread("./dna_thresh.csv")           # numerical solutions
 
 # Function to plot the fitness surface
 fitness_plot = function(fitness, boundaries, uarr1, uarr2, u_range, cost_range)
@@ -33,7 +35,13 @@ fitness_plot = function(fitness, boundaries, uarr1, uarr2, u_range, cost_range)
             u = u_range[2]),
         fitness
     )
-    pal = c("#ffffff", "#3f3391", "#4d56b5", "#718fd0", "#91c0e7");
+    # pal = c("#ffffff", "#3f3391", "#4d56b5", "#718fd0", "#91c0e7");
+    # pal = c("#ffffff", "#2B1C8C", "#3F50B0", "#5483D3", "#68B7F7");
+    pal = c("#ffffff", "#5141BA", "#5968CE", "#6090E3", "#68B7F7");
+    # pal = c("#FFFFFF", "#EA72AD", "#EFA1A1", "#F5D095", "#FAFF89");
+    # pal = c("#FFFFFF", "#F4F269", "#C1DD6B", "#8FC76E", "#5CB270");
+    # pal = c("#FFFFFF", "#0077b6", "#0096c7", "#00b4d8", "#48cae4");
+
     pat = c("stripe", "none", "none", "none", "none");
     
     f2[, thresh_name := as.factor(threshold)]
@@ -56,10 +64,10 @@ fitness_plot = function(fitness, boundaries, uarr1, uarr2, u_range, cost_range)
             arrows = arrow(length = unit(0.15, "cm"), type = "closed"), linewidth = 0.4, colour = "white", fill = "white") +
         geom_arrowsegment(data = uarr2, aes(x = u, xend = uend, y = cost, yend = cost), 
             arrows = arrow(length = unit(0.15, "cm"), type = "closed"), linewidth = 0.4, colour = "white", fill = "white") +
-        scale_colour_manual(values = c(extinction = "black", analytical = "black", numerical = "black")) +
-        scale_linetype_manual(values = c(extinction = "solid", analytical = "dashed", numerical = "solid")) +
+        scale_colour_manual(values = c(extinction = "black", analytical = "black", numerical = "black", simple = "black")) +
+        scale_linetype_manual(values = c(extinction = "solid", analytical = "dashed", numerical = "solid", simple = "dotted")) +
         cowplot::theme_cowplot(font_size = 8) +
-        theme(legend.position = "none")
+        theme(legend.position = "none", plot.title = element_text(size = 8, face = "plain"))
 }
 
 # This is just to make boundaries of plot slightly nicer -- does not affect accuracy of the plot.
@@ -86,19 +94,22 @@ fitness2 = fitness2[order(-threshold, cost)]
 
 # Assemble key boundaries on fitness plots
 pri_boundaries = rbind(
-    private_thresh[method == "simulate", .(what = "analytical", u, cost)],
+    private_thresh[calc == "product" & cost > 0.001, .(what = "analytical", u, cost)],
+    private_thresh[calc == "simple" & cost > 0.0016, .(what = "simple", u, cost)],
     rna_thresh[, .(what = "numerical", u, cost)],
     fitness2[threshold == 1e-6, .(what = "extinction", u, cost)]
 )
 # Tidy up boundaries for plotting
 pri_boundaries[what == "numerical" & cost == min(cost[what == "numerical"]), cost := 0.0022]
-pri_boundaries[what == "analytical" & cost == min(cost[what == "analytical"]), cost := 0.00088]
+pri_boundaries[what == "analytical" & cost == min(cost[what == "analytical"]), cost := 0.0014]
+pri_boundaries[what == "simple" & cost == min(cost[what == "simple"]), cost := 0.0021]
 
 # Assemble key boundaries on fitness plots
 pub_boundaries = rbind(
-    public_thresh[method == "simulate", .(what = "analytical", u, cost)],
+    public_thresh[calc == "product", .(what = "analytical", u, cost)],
+    public_thresh[calc == "simple", .(what = "simple", u, cost)],
     dna_thresh[, .(what = "numerical", u, cost)],
-    public_thresh[method == "simulate" & cost < 5e-5, .(what = "numerical", u, cost)][order(-cost)],
+    public_thresh[calc == "sum" & cost < 5e-5, .(what = "numerical", u, cost)][order(-cost)],
     fitness2[threshold == 1e-6, .(what = "extinction", u, cost)]
 )
 
@@ -127,18 +138,18 @@ pri_uarr1[cost > 6.7e-6 & cost < 6.9e-6, u := 0.0008]
 pub_uarr1[cost > 6.7e-6 & cost < 6.9e-6, u := 0.0008]
 
 # Plots
-p1 = fitness_plot(fitness2, pub_boundaries, pub_uarr1, pub_uarr2, u_range = c(0.0001, 2/3), cost_range = c(5e-6, 0.1)) +
+p1 = fitness_plot(fitness2, pub_boundaries[what != "extinction"], pub_uarr1, pub_uarr2, u_range = c(0.0001, 2/3), cost_range = c(5e-6, 0.1)) +
     annotate("text", x = c(0.047, 0.094, 0.19), y = 0.0012, label = c("w = 0.5", "w = 0.01", "w = 0.001"),
         angle = c(56, 52, 50), hjust = 0.5, vjust = 0.5, size = 7 / ggplot2:::.pt, colour = "white", fontface = "bold") +
     labs(title = "Public replication")
 
-p2 = fitness_plot(fitness2, pri_boundaries, pri_uarr1, pri_uarr2, u_range = c(0.0001, 2/3), cost_range = c(5e-6, 0.1)) +
+p2 = fitness_plot(fitness2, pri_boundaries[what != "extinction"], pri_uarr1, pri_uarr2, u_range = c(0.0001, 2/3), cost_range = c(5e-6, 0.1)) +
     annotate("text", x = c(0.047, 0.094, 0.19), y = 0.0012, label = c("w = 0.5", "w = 0.01", "w = 0.001"),
         angle = c(56, 52, 50), hjust = 0.5, vjust = 0.5, size = 7 / ggplot2:::.pt, colour = "white", fontface = "bold") +
     labs(title = "Private replication")
 
-p = cowplot::plot_grid(p1, p2, nrow = 1, labels = LETTERS, label_size = 9)
-ggsave("./Figures/Box-surface.pdf", p, width = 20, height = 10, units = "cm", useDingbats = FALSE)
+p = cowplot::plot_grid(p1, p2, nrow = 1, labels = LETTERS, label_size = 8)
+ggsave("./Figures/2-invasion.pdf", p, width = 20, height = 10, units = "cm", useDingbats = FALSE)
 
 
 
@@ -298,100 +309,50 @@ ggplot(fitness) +
 # "Analytic" approach #
 #######################
 
-# In this part we find invasion thresholds by directly calculating B and C
+# In this part we find invasion thresholds by directly calculating R, B and C
 # for a "duplication event".
 
 # Tester for uniroot
 # If simulate == FALSE, get a rough equlibrium n and equilibrium dW/dn
 # through analytic approximations. If simulate == TRUE, actually simulate
-# a 1-type transposon model to get equilibrium n and dW/dn.
-test_evolve = function(u, cost, simulate = FALSE, mode = "private")
+# a 1-type transposon model to get equilibrium n and dW/dn. Note that 
+# simulate == TRUE is still part of the "analytic" approach as it then 
+# calculates B and C in the normal way.
+test_evolve = function(u, cost, simulate = FALSE, how = "product", mode = "private")
 {
-    # Estimate equilibrium n
-    n_est = eqn_vf(u, cost);
-    
-    # Definition of fitness function
-    wf = function(n) (1 - cost) ^ (0.5*n^2);
-    
-    if (simulate) {
-        # Try out a value for n_max
-        n_max = qpois(-1e-10, n_est, lower.tail = TRUE, log.p = TRUE);
-        n_max = max(n_max, 25)
-        if (n_max > 500) {
-            stop(n_max)
-        }
-        print(n_max)
-    
-        # Get equilibrium TE distribution
-        X = eq_te(n_max = n_max, g_max = 5000, u = u, cost = cost, 
-            n_0 = 10, epsilon = 1e-16, after_selection = FALSE);
-        
-        print(tail(X, 1))
-    
-        # Measure average n, average w, and slope of host relative fitness on transposon number
-        nn = 0:(n_max - 1);
-        n_avg = weighted.mean(nn, X); # Note: this is average n after proliferation.
-        w_avg = weighted.mean(wf(nn), X);
-        cov_wn = cov.wt(cbind(n = nn, w = wf(nn) / w_avg), wt = X, method = "ML")$cov;
-        beta = cov_wn["n", "w"] / cov_wn["n", "n"];
-    } else {
-        # Just do everything through analytics
-        n_avg = n_est;
-        w_avg = wf(n_avg);
-        beta = log(1 - cost) * n_avg;
-    }
-    
-    # The condition (B - C)
-    if (mode == "private") {
-        B = (1 / (1 + u)) * (1 + 2*beta / (2 - exp(beta) * (1 + u)));
-    } else {
-        nn = n_avg;
-        # get around issues with exp(nn) overflowing or with the division underflowing
-        if (nn < 100) { 
-            dN1 = (exp(nn) * (nn * (1 + 4*u) * (1 + nn + nn*u) - 4*u) - nn + 4*u) / 
-                (exp(nn) * (nn + 4 * (nn - 1) * u) - nn + 4*u);
-        } else {
-            dN1 = (nn * (1 + 4*u) * (1 + nn + nn*u) - 4*u) / 
-                (nn + 4 * (nn - 1) * u);
-        }
-
-        dN = dN1 - 
-            nn * (1 + u) - 
-            (1 + u * (1 + u) * (7 + 4*u)) / 
-            ((1 + u) * (1 + 2 * u));
-        R = ((exp(-nn) + nn - 1)*4*u*nn + 
-                (1 - exp(-nn))*nn^2 + (2*(1 - exp(-nn)) + nn^2 - 2*nn)*9*u^2) / 
-                ((1 + 2*u + 3*u^2)*nn^3)
-        B = R * (1/(1+u) + (2*beta / (2 - exp(beta) * (1 + u))) * dN);
-    }
-    C = -2 * beta * (1 + u)^2 / ((1 - u) * (2 - exp(beta) * (1 + u)));
-    
-    B - C
+    cat(u, " ")
+    results = get_RBC(u, cost, simulate, how, mode)
+    results$R * results$B - results$C
 }
 
 # Establishing the thresholds here also takes a while to run.
 # Thresholds, private replication
 thresh = list();
 
-for (cexp in seq(-3.8, -3.3, 0.1)) {
-    cost = 5 * 10^cexp;
-    thresh[[length(thresh) + 1]] = 
-        data.table(cost = cost, method = "simulate",
-            u = uniroot(test_evolve, c(0.001, 0.26), cost = cost, simulate = TRUE, mode = "private")$root);
-}
-
-for (cexp in c(seq(-3.2, -1.8, 0.1), -1.69897000433602)) {
-    cost = 5 * 10^cexp;
-    thresh[[length(thresh) + 1]] = 
-        data.table(cost = cost, method = "simulate",
-            u = uniroot(test_evolve, c(0.001, 0.3), cost = cost, simulate = TRUE, mode = "private")$root);
+for (how in c("product", "sum")) {
+    for (cexp in seq(-3.8, -2.0, 0.1)) {
+        cat("\n", cexp, "\n")
+        cost = 5 * 10^cexp;
+        thresh[[length(thresh) + 1]] = 
+            data.table(cost = cost, eq_n = "simulate", calc = how,
+                u = uniroot(test_evolve, c(0.2, 0.5), cost = cost, simulate = TRUE, how = how, mode = "private")$root);
+    }
+    
+    for (cexp in c(seq(-1.9, -1.8, 0.1), -1.69897000433602)) {
+        cat("\n", cexp, "\n")
+        cost = 5 * 10^cexp;
+        thresh[[length(thresh) + 1]] = 
+            data.table(cost = cost, eq_n = "simulate", calc = how,
+                u = uniroot(test_evolve, c(0.2, 0.5), cost = cost, simulate = TRUE, how = how, mode = "private")$root);
+    }
 }
 
 for (cexp in c(seq(-6, -1.8, 0.1), -1.69897000433602)) {
+    cat("\n", cexp, "\n")
     cost = 5 * 10^cexp;
     thresh[[length(thresh) + 1]] = 
-        data.table(cost = cost, method = "analytic",
-            u = uniroot(test_evolve, c(0.001, 0.3), cost = cost, simulate = FALSE, mode = "private")$root);
+        data.table(cost = cost, eq_n = "analytic", calc = "simple",
+            u = uniroot(test_evolve, c(0.001, 0.6), cost = cost, simulate = FALSE, how = "simple", mode = "private")$root);
 }
 thresh = rbindlist(thresh);
 
@@ -399,28 +360,59 @@ thresh = rbindlist(thresh);
 
 # Thresholds, public replication
 thresh = list();
+
 for (cexp in seq(-6.0, -4.6, 0.1)) {
+    cat("\n", cexp, "\n")
     cost = 5 * 10^cexp;
     interval = c(0.5 * sqrt(cost), 0.8 * sqrt(cost)); # Empirically, this works well to limit the search area
     thresh[[length(thresh) + 1]] = 
-        data.table(cost = cost, method = "simulate",
-            u = uniroot(test_evolve, interval, cost = cost, simulate = TRUE, mode = "public")$root);
+        data.table(cost = cost, eq_n = "simulate", calc = "sum",
+            u = uniroot(test_evolve, interval, cost = cost, simulate = TRUE, how = "sum", mode = "public")$root);
 }
 
 for (cexp in c(seq(-4.5, -1.8, 0.1), -1.69897000433602)) {
+    cat("\n", cexp, "\n")
     cost = 5 * 10^cexp;
     interval = c(0.5 * sqrt(cost), sqrt(cost)); # Empirically, this works well to limit the search area
     thresh[[length(thresh) + 1]] = 
-        data.table(cost = cost, method = "simulate",
-            u = uniroot(test_evolve, interval, cost = cost, simulate = TRUE, mode = "public")$root);
+        data.table(cost = cost, eq_n = "simulate", calc = "sum", 
+            u = uniroot(test_evolve, interval, cost = cost, simulate = TRUE, how = "sum", mode = "public")$root);
+}
+
+for (cexp in seq(-6.0, -4.6, 0.1)) {
+    cat("\n", cexp, "\n")
+    cost = 5 * 10^cexp;
+    interval = c(0.5 * sqrt(cost), 0.8 * sqrt(cost)); # Empirically, this works well to limit the search area
+    thresh[[length(thresh) + 1]] = 
+        data.table(cost = cost, eq_n = "simulate", calc = "product",
+            u = uniroot(test_evolve, interval, cost = cost, simulate = TRUE, how = "product", mode = "public")$root);
+}
+
+for (cexp in c(seq(-4.5, -2.4, 0.1)) {
+    cat("\n", cexp, "\n")
+    cost = 5 * 10^cexp;
+    interval = c(0.5 * sqrt(cost), sqrt(cost)); # Empirically, this works well to limit the search area
+    thresh[[length(thresh) + 1]] = 
+        data.table(cost = cost, eq_n = "simulate", calc = "product", 
+            u = uniroot(test_evolve, interval, cost = cost, simulate = TRUE, how = "product", mode = "public")$root);
+}
+
+for (cexp in c(seq(-2.3, -1.8, 0.1), -1.69897000433602)) {
+    cat("\n", cexp, "\n")
+    cost = 5 * 10^cexp;
+    interval = c(0.5 * sqrt(cost), 1.5 * sqrt(cost)); # Empirically, this works well to limit the search area
+    thresh[[length(thresh) + 1]] = 
+        data.table(cost = cost, eq_n = "simulate", calc = "product", 
+            u = uniroot(test_evolve, interval, cost = cost, simulate = TRUE, how = "product", mode = "public")$root);
 }
 
 for (cexp in c(seq(-6, -1.8, 0.1), -1.69897000433602)) {
+    cat("\n", cexp, "\n")
     cost = 5 * 10^cexp;
     interval = c(0.4 * sqrt(cost), 2 * sqrt(cost));
     thresh[[length(thresh) + 1]] = 
-        data.table(cost = cost, method = "analytic",
-            u = uniroot(test_evolve, interval, cost = cost, simulate = FALSE, mode = "public")$root);
+        data.table(cost = cost, eq_n = "analytic", calc = "simple",
+            u = uniroot(test_evolve, interval, cost = cost, simulate = FALSE, how = "simple", mode = "public")$root);
 }
 thresh = rbindlist(thresh);
 

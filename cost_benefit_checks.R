@@ -235,9 +235,9 @@ ggsave("./Figures/S-invasion_check_dist_2d.pdf", p, width = 15, height = 15, uni
 
 
 
-
-# How much of a difference does the marginalisation make in calculations?
-# Answer below
+###########################################################################
+# How much of a difference does the marginalisation make in calculations? #
+###########################################################################
 
 # Turn a matrix into the product of its marginals
 marginalize = function(x)
@@ -245,6 +245,7 @@ marginalize = function(x)
     rowSums(x) %o% colSums(x);
 }
 
+# Generate the Poisson-quasigeometric approximation for the frequency matrix
 approximalize = function(x, u)
 {
     nn = weighted.mean(0:99, rowSums(x));
@@ -255,25 +256,7 @@ approximalize = function(x, u)
     mr %o% mc;
 }
 
-approximalize_n = function(x, u)
-{
-    nn = weighted.mean(0:99, rowSums(x));
-    
-    mr = dpois(0:99, nn);
-    mc = colSums(x);
-    mr %o% mc;
-}
-
-approximalize_m = function(x, u)
-{
-    phi = 1-sum(x[,1]);
-    
-    mr = rowSums(x);
-    mc = c(1 - phi, dquasi1(1:99, u) * phi);
-    mr %o% mc;
-}
-
-check_N_calcs = function(Cost, Dupl)
+check_N_calcs = function(Cost, Dupl, M12 = FALSE)
 {
     # Load genotype file
     str_cost = stringr::str_remove_all(sprintf("%g", Cost), "0\\.");
@@ -288,27 +271,35 @@ check_N_calcs = function(Cost, Dupl)
     f[cbind(genotypes$A + 1, genotypes$B + 1)] = genotypes$f;
     
     # Get calculated Ns
-    N_full = Ns(f, Dupl, DD);
-    N_marg = Ns(marginalize(f), Dupl, DD);
-    N_appr = Ns(approximalize(f, Dupl), Dupl, DD);
-    # N_appn = Ns(approximalize_n(f, Dupl), Dupl);
-    # N_appm = Ns(approximalize_m(f, Dupl), Dupl);
-    
+    N_full = Ns(f, Dupl, DD, M12);
+    N_marg = Ns(marginalize(f), Dupl, DD, M12);
+    N_appr = Ns(approximalize(f, Dupl), Dupl, DD, M12);
+
     # Get Ns from simulation
     N0 = ds[cost == Cost & dupl == Dupl & mode == "pri" & stage == 2 & tag == "old" & g == GC - 1, N_B]
     DNPar1 = ds[cost == Cost & dupl == Dupl & mode == "pri" & stage == 2 & tag == "old" & g == GC, N_B] - N0
     DNOffPr1 = ds[cost == Cost & dupl == Dupl & mode == "pri" & stage == 2 & tag == "new" & g == GC, N_B] - N0
     DNOffPu1 = ds[cost == Cost & dupl == Dupl & mode == "pub" & stage == 2 & tag == "new" & g == GC, N_B] - N0
     
+    # Get Ns from math
+    n = weighted.mean(0:99, rowSums(f));
+    u = Dupl;
+    mN0 = (n*(1-u^2) + (1+u)^2 + u*(1-u)/(1+u)) / (1 - u);
+    mDNPar1 = (1 + u) / (1 - u);
+    mDNOffPr1 = 1 / (1 + u);
+    # mDNOffPu1 = n / (exp(n) - 1);
+    mDNOffPu1 = (exp(n)*(n*(1+4*u)*(1+n*(1+u))-4*u)-n+4*u)/(exp(n)*(n+4*u*(n-1))-n+4*u) - 
+        (1+n*(1+u)^2*(1+2*u)+u*(1+u)*(7+4*u))/((1+u)*(1+2*u))
+    
     cat(".")
     
     data.table(u = Dupl, cost = Cost,
-        variable = factor(rep(c("N0", "DNPar1", "DNOffPr1", "DNOffPu1"), each = 4), levels = c("N0", "DNPar1", "DNOffPr1", "DNOffPu1")),
-        method = factor(rep(c("Sim", "Full", "Marg", "Appx"), 4), levels = c("Sim", "Full", "Marg", "Appx")),
-        value = c(N0, N_full[["N0"]], N_marg[["N0"]], N_appr[["N0"]],
-            DNPar1,   N_full[["NPar1"]]   - N_full[["N0"]], N_marg[["NPar1"]]   - N_marg[["N0"]], N_appr[["NPar1"]]   - N_appr[["N0"]],
-            DNOffPr1, N_full[["NOffPr1"]] - N_full[["N0"]], N_marg[["NOffPr1"]] - N_marg[["N0"]], N_appr[["NOffPr1"]] - N_appr[["N0"]],
-            DNOffPu1, N_full[["NOffPu1"]] - N_full[["N0"]], N_marg[["NOffPu1"]] - N_marg[["N0"]], N_appr[["NOffPu1"]] - N_appr[["N0"]]))
+        variable = factor(rep(c("N0", "DNPar1", "DNOffPr1", "DNOffPu1"), each = 5), levels = c("N0", "DNPar1", "DNOffPr1", "DNOffPu1")),
+        method = factor(rep(c("Sim", "Full", "Marg", "Appx", "Math"), 4), levels = c("Sim", "Full", "Marg", "Appx", "Math")),
+        value = c(N0, N_full[["N0"]], N_marg[["N0"]], N_appr[["N0"]], mN0,
+            DNPar1,   N_full[["NPar1"]]   - N_full[["N0"]], N_marg[["NPar1"]]   - N_marg[["N0"]], N_appr[["NPar1"]]   - N_appr[["N0"]], mDNPar1,
+            DNOffPr1, N_full[["NOffPr1"]] - N_full[["N0"]], N_marg[["NOffPr1"]] - N_marg[["N0"]], N_appr[["NOffPr1"]] - N_appr[["N0"]], mDNOffPr1,
+            DNOffPu1, N_full[["NOffPu1"]] - N_full[["N0"]], N_marg[["NOffPu1"]] - N_marg[["N0"]], N_appr[["NOffPu1"]] - N_appr[["N0"]], mDNOffPu1))
 }
 
 N_data = rbind(
@@ -329,24 +320,47 @@ N_data = rbind(
     check_N_calcs(.05, 0.500)
 )
 
+
+N_data_m = rbind(
+    check_N_calcs(.0005, 0.001, TRUE),
+    check_N_calcs(.0005, 0.005, TRUE),
+    check_N_calcs(.0005, 0.010, TRUE),
+    check_N_calcs(.0005, 0.015, TRUE),
+    check_N_calcs(.0005, 0.020, TRUE),
+    check_N_calcs(.005, 0.010, TRUE),
+    check_N_calcs(.005, 0.050, TRUE),
+    check_N_calcs(.005, 0.100, TRUE),
+    check_N_calcs(.005, 0.150, TRUE),
+    check_N_calcs(.005, 0.200, TRUE),
+    check_N_calcs(.05, 0.100, TRUE),
+    check_N_calcs(.05, 0.200, TRUE),
+    check_N_calcs(.05, 0.300, TRUE),
+    check_N_calcs(.05, 0.400, TRUE),
+    check_N_calcs(.05, 0.500, TRUE)
+)
+
+
 # Save results as qs to retain factor ordering.
 # qs::qsave(N_data, "./N_data.qs") # (with m from 1 to infinity; with u as argument to quasigeometric distribution)
-# qs::qsave(N_data, "./N_data_m_1_2.qs") # with m from 1 to 2
-# qs::qsave(N_data, "./N_data_Q_u(1-u).qs") # with u*(1-u) as argument to quasigeometric distribution
+# qs::qsave(N_data_m, "./N_data_m_1_2.qs") # with m from 1 to 2
+# qs::qsave(N_data_u, "./N_data_Q_u(1-u).qs") # with u*(1-u) as argument to quasigeometric distribution
 
 N_data = qs::qread("./N_data.qs")
 N_data_m = qs::qread("./N_data_m_1_2.qs")
-N_data_u = qs::qread("./N_data_Q_u(1-u).qs")
+# N_data_u = qs::qread("./N_data_Q_u(1-u).qs")
 
-ggplot(N_data_u) + 
-    geom_line(aes(x = u, y = value, group = method, colour = method, linetype = method)) +
-    facet_grid(variable~cost, scales = "free")
+# ggplot(N_data_u) + 
+#     geom_line(aes(x = u, y = value, group = method, colour = method, linetype = method)) +
+#     facet_grid(variable~cost, scales = "free")
 
 # Assemble data
 N_data_plot = rbind(
-    N_data  [method %in% c("Sim", "Marg", "Appx") & !(variable == "DNOffPu1" & method == "Appx")],
-    N_data_m[method %in% c("Appx") & variable == "DNOffPu1", .(u, cost, variable, method = "Appx", value)]
+    N_data  [!(variable == "DNOffPu1" & method == "Appx")],
+    N_data_m[method == c("Appx") & variable == "DNOffPu1", .(u, cost, variable, method = "Appx", value)]
 )
+
+# Adjust DN1Par for DD
+N_data_plot[variable == "DNPar1" & method != "Math",   value := value / DD]
 
 # Format labels
 N_data_plot[, cost_label := as.character(cost)]
@@ -356,18 +370,19 @@ N_data_plot[cost == 5e-02, cost_label := "cost == 0.05"]
 N_data_plot[, cost_label := factor(cost_label, unique(cost_label))]
 
 N_data_plot[variable == "N0",       variable_label := "italic(N)[0]"]
-N_data_plot[variable == "DNPar1",   value := value / DD]
-N_data_plot[variable == "DNPar1",   variable_label := "Delta*italic(N)[1]^{Par} / italic(d)"]
+N_data_plot[variable == "DNPar1",   variable_label := "Delta*italic(N)[1]^{Par}"]
 N_data_plot[variable == "DNOffPr1", variable_label := "Delta*italic(N)[list(Pr,1)]^{Off}"]
 N_data_plot[variable == "DNOffPu1", variable_label := "Delta*italic(N)[list(Pu,1)]^{Off}"]
-N_data_plot[, variable_label := factor(variable_label, c("italic(N)[0]", "Delta*italic(N)[list(Pr,1)]^{Off}", "Delta*italic(N)[list(Pu,1)]^{Off}", "Delta*italic(N)[1]^{Par} / italic(d)"))]
+N_data_plot[, variable_label := factor(variable_label, c("italic(N)[0]", "Delta*italic(N)[list(Pr,1)]^{Off}", "Delta*italic(N)[list(Pu,1)]^{Off}", "Delta*italic(N)[1]^{Par}"))]
 
-N_data_plot[method == "Sim", method_label := "Joint distribution"]
+N_data_plot[method == "Sim",  method_label := "Simulation"]
+N_data_plot[method == "Full", method_label := "Joint distribution"]
 N_data_plot[method == "Marg", method_label := "Marginal product"]
 N_data_plot[method == "Appx", method_label := "Approximation"]
+N_data_plot[method == "Math", method_label := "Analytical"]
 N_data_plot[, method_label := factor(method_label, unique(method_label))]
 
-ggplot(N_data_plot) + 
+ggplot(N_data_plot[method %in% c("Full", "Marg", "Appx")]) + 
     geom_line(aes(x = u, y = value, group = method_label, colour = method_label, linetype = method_label, linewidth = method_label)) +
     facet_grid(variable_label ~ cost_label, scales = "free", labeller = label_parsed, switch = "y") +
     cowplot::theme_cowplot(font_size = 8) +
@@ -380,14 +395,179 @@ ggplot(N_data_plot) +
     scale_linewidth_manual(values = c(1.5, 0.75, 0.75))
 
 ggsave("./Figures/S-Napprox.pdf", width = 16, height = 12, units = "cm", useDingbats = FALSE)
+
+ggplot(N_data_plot[method %in% c("Sim", "Full", "Appx", "Math")]) + 
+    geom_line(aes(x = u, y = value, group = method_label, colour = method_label, linetype = method_label, linewidth = method_label)) +
+    facet_grid(variable_label ~ cost_label, scales = "free", labeller = label_parsed, switch = "y") +
+    cowplot::theme_cowplot(font_size = 8) +
+    theme(strip.placement = "outside", strip.background = element_blank(), legend.position = c(0.685, 0.93),
+        strip.text = element_text(size = 8), panel.grid = element_line(colour = "#eeeeee", linetype = 1, linewidth = 0.2),
+        legend.key.width = unit(0.5, "cm")) +
+    labs(y = NULL, x = "Duplication rate,"~italic(u), colour = "Method", linetype = "Method", linewidth = "Method") +
+    scale_colour_manual(values = c("#000000", "#000000", "#448844", "#448844")) +
+    scale_linetype_manual(values = c(1, 3, 1, 3)) +
+    scale_linewidth_manual(values = c(0.5, 1, 0.5, 1))
+
+ggsave("./Figures/S-Napprox-2.pdf", width = 16, height = 12, units = "cm", useDingbats = FALSE)
+
+
+
+# When there are multiple mutants in the genome
+
+4 mut + 1 duplicant (immediately after proliferation - after creation of duplicant)
+recombine: remove half of mutants
+proliferate: duplicate mutants only 
+
+M = 1
+m_max = 10
+t_max = 20
+u = 0.1
+f = rep(0, m_max + 1)
+f[M + 1] = 1
+
+for (t in 1:t_max) {
+    print(sum(f * 0:m_max))
     
-N_data
+    # recombine
+    fp = rep(0, m_max + 1)
+    for (i in 0:m_max) {
+        fp = fp + f[i + 1] * dbinom(0:m_max, i, 0.5)
+    }
+    # proliferate
+    f = rep(0, m_max + 1)
+    for (i in 0:m_max) {
+        f = f + fp[i + 1] * dpois(0:m_max - i, i * u)
+    }
+}
+print(sum(f * 0:m_max))
+
+
+
+####################################
+# Checking of R, B, C calculations #
+####################################
+
+# Relatedness
+# Stage 1, because this is when the parent transposon "chooses" what to duplicate.
+DR = ds[mode == "pub" & g == 99 & stage == 1 & tag == "full", .(mode = "pub", R_measured = r), by = .(cost, u = dupl)]
+DR = rbind(DR, DR[, .(cost, u, mode = "pri", R_measured = 1)])
+
+# Cost
+DC = ds[tag == "old" & stage == 2, 
+    .(C_measured = (b[100]-b[200])/(b[100]*DD/(1 + u)) # cost, as measured in actual change in mutant transposon number PER duplication event
+    ), by = .(cost, u = dupl, mode)]
+
+# Benefit, version with B and C measured at stage 2
+DB = ds[tag == "new" & stage == 2,
+    .(rB_measured = b[200] / (b[99] * DD/(1 + u))),    # relatedness x benefit, as measured in actual change in mutant transposon number PER duplication event
+    by = .(cost, u = dupl, mode)]
+DB = merge(DB, DR)
+DB[, B_measured := rB_measured / R_measured]
+DB[, rB_measured := NULL]
+DB[, R_measured := NULL]
+
+for (par in 1:nrow(DB)) {
+    cat(".")
+    p_cost = DB[par, cost]
+    p_u = DB[par, u]
+    p_mode = ifelse(DB[par, mode] == "pri", "private", "public")
+    
+    rbc_product = get_RBC(p_u, p_cost, simulate = TRUE, how = "product", mode = p_mode)
+    rbc_sum = get_RBC(p_u, p_cost, simulate = TRUE, how = "sum", mode = p_mode)
+    rbc_simple = get_RBC(p_u, p_cost, simulate = FALSE, how = "simple", mode = p_mode)
+
+    DR[cost == p_cost & u == p_u & mode == substr(p_mode, 1, 3), R_product := rbc_product$R]
+    DR[cost == p_cost & u == p_u & mode == substr(p_mode, 1, 3), R_sum     := rbc_sum$R]
+    DR[cost == p_cost & u == p_u & mode == substr(p_mode, 1, 3), R_simple  := rbc_simple$R]
+    DB[cost == p_cost & u == p_u & mode == substr(p_mode, 1, 3), B_product := rbc_product$B]
+    DB[cost == p_cost & u == p_u & mode == substr(p_mode, 1, 3), B_sum     := rbc_sum$B]
+    DB[cost == p_cost & u == p_u & mode == substr(p_mode, 1, 3), B_simple  := rbc_simple$B]
+    DC[cost == p_cost & u == p_u & mode == substr(p_mode, 1, 3), C_product := rbc_product$C]
+    DC[cost == p_cost & u == p_u & mode == substr(p_mode, 1, 3), C_sum     := rbc_sum$C]
+    DC[cost == p_cost & u == p_u & mode == substr(p_mode, 1, 3), C_simple  := rbc_simple$C]
+}
+
+DA = rbind(
+    melt(DR, id.vars = c("cost", "u", "mode")),
+    melt(DB, id.vars = c("cost", "u", "mode")),
+    melt(DC, id.vars = c("cost", "u", "mode"))
+)
+DA[, method := stringr::str_remove_all(variable, "^[A-Z]_")]
+DA[, variable := stringr::str_remove_all(variable, "_.*$")]
+
+# Don't bother with sum method
+DA = DA[method != "sum"]
+
+DA[, cost_label := as.character(cost)]
+DA[cost == 5e-04, cost_label := "cost == 5 %*% 10^{-4}"]
+DA[cost == 5e-03, cost_label := "cost == 0.005"]
+DA[cost == 5e-02, cost_label := "cost == 0.05"]
+DA[, cost_label := factor(cost_label, unique(cost_label))]
+
+DA[mode == "pri" & variable == "B", variable := "B^{Pri}"]
+DA[mode == "pub" & variable == "B", variable := "B^{Pub}"]
+
+DA[, variable := factor(variable, c("R", "B^{Pri}", "B^{Pub}", "C"))]
+
+ggplot(DA[mode == "pub" | variable == "B^{Pri}"]) +
+    geom_line(aes(x = u, y = value, colour = method, linetype = method, linewidth = method)) +
+    geom_blank(aes(y = 1)) +
+    facet_grid(variable ~ cost_label, scales = "free", labeller = label_parsed, switch = "y") +
+    scale_y_continuous(expand = c(0.05, 0), limits = c(0, NA)) +
+    scale_x_continuous(expand = c(0.05, 0)) +
+    scale_colour_manual(values = c("#000000", "#ff0000", "#2266dd")) +
+    scale_linetype_manual(values = c("solid", "64", "11")) +
+    scale_linewidth_manual(values = c(1, 0.5, 0.5)) +
+    theme(panel.background = element_rect(colour = "black"), 
+        panel.spacing = unit(0.4, "cm"), axis.line = element_blank(),
+        strip.placement = "outside", strip.background = element_blank(), 
+        legend.position = c(0.16, 0.92), strip.text = element_text(size = 8), 
+        panel.grid = element_line(colour = "#eeeeee", linetype = 1, linewidth = 0.2),
+        legend.key.width = unit(0.8, "cm"), strip.text.y.left = element_text(angle = 0)) +
+    labs(x = "Duplication rate,"~italic(u), y = NULL, colour = NULL, linetype = NULL, linewidth = NULL)
+
+ggsave("./Figures/S-RBCapprox.pdf", width = 16, height = 12, units = "cm", useDingbats = FALSE)
+
+
+prod(1 + exp(-1:-1000))
+
+
+
+###########
+# SCRATCH #
+###########
+
+
+
+
+
 
 
 check_N_calcs(.05, 0.500)
 
 # OK so there is a discrepancy with NOffPu1 for high u high cost.
     
+
+
+
+
+approximalize_n = function(x, u)
+{
+    nn = weighted.mean(0:99, rowSums(x));
+    
+    mr = dpois(0:99, nn);
+    mc = colSums(x);
+    mr %o% mc;
+}
+
+approximalize_m = function(x, u)
+{
+    phi = 1-sum(x[,1]);
+    
+    mr = rowSums(x);
+    mc = c(1 - phi, dquasi1(1:99, u) * phi);
+    mr %o% mc;
+}
 
 
 # N0

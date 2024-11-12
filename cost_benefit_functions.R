@@ -13,6 +13,12 @@ load_analysis = function(mode, cost, dupl)
             thin = 1, gunit = 1, tag = "new")
     );
     
+    # If file exists, load "par" too
+    par_file = paste0("./Deterministic/Runs/5-Analysis-Partial/", mode, "_c", cost, "_u", dupl, "_par.ngd");
+    if (file.exists(par_file)) {
+        d = rbind(d, load_ngd(par_file, thin = 1, gunit = 1, tag = "par"));
+    }
+    
     # Decompose the 'g' variable into stage and generation 
     # (i.e. 1.3 becomes g = 1, stage = 3)
     d[, stage := round((g %% 1) * 10)];
@@ -321,4 +327,95 @@ ext_invade = function(u, cost, type, gens = 100, nmax = 100, nbmax = 15, epsilon
     b1 = output[g == 100.1, b]
     
     (b1 - b0) / b0
+}
+
+
+# If simulate == FALSE, get a rough equlibrium n and equilibrium dW/dn
+# through analytic approximations. If simulate == TRUE, actually simulate
+# a 1-type transposon model to get equilibrium n and dW/dn. Note that 
+# simulate == TRUE is still part of the "analytic" approach, as it then 
+# calculates R, B and C in the normal way.
+# Then, with:
+# how == "product" use product definitions of B and C
+# how == "sum"     use sum approximations to product definitions of B and C
+# how == "simple"  use simple approximations to B and C (B = 1, C = 2u basically)
+get_RBC = function(u, cost, simulate = FALSE, how = "product", mode = "private")
+{
+    # Estimate equilibrium n
+    n_est = eqn_vf(u, cost);
+    
+    # Definition of fitness function
+    wf = function(n) (1 - cost) ^ (0.5*n^2);
+    
+    if (simulate) {
+        # Try out a value for n_max
+        n_max = qpois(-1e-10, n_est, lower.tail = TRUE, log.p = TRUE);
+        n_max = max(n_max, 25)
+        if (n_max > 500) {
+            stop(n_max)
+        }
+        # Get equilibrium TE distribution
+        X = eq_te(n_max = n_max, g_max = 5000, u = u, cost = cost, 
+            n_0 = 10, epsilon = 1e-16, after_selection = FALSE);
+
+        # Measure average n, average w, and slope of host relative fitness on transposon number
+        nn = 0:(n_max - 1);
+        n_avg = weighted.mean(nn, X); # Note: this is average n after proliferation.
+        w_avg = weighted.mean(wf(nn), X);
+        cov_wn = cov.wt(cbind(n = nn, w = wf(nn) / w_avg), wt = X, method = "ML")$cov;
+        beta = cov_wn["n", "w"] / cov_wn["n", "n"];
+    } else {
+        # Just do everything through analytics
+        n_avg = n_est;
+        w_avg = wf(n_avg);
+        beta = log(1 - cost) * n_avg;
+    }
+    n = n_avg; # This name is more convenient below...
+
+    # Now, calculate various key quantities...
+    W0 = 1 / (1 + u);
+    
+    if (mode == "private") {
+        N1Off = 1/(1+u)
+        R = 1
+    } else {
+        # get around issues with exp(n) overflowing or with the division underflowing
+        if (n < 100) { 
+            dN1 = (exp(n) * (n * (1 + 4*u) * (1 + n + n*u) - 4*u) - n + 4*u) / 
+                (exp(n) * (n + 4 * (n - 1) * u) - n + 4*u);
+        } else {
+            dN1 = (n * (1 + 4*u) * (1 + n + n*u) - 4*u) / 
+                (n + 4 * (n - 1) * u);
+        }
+
+        N1Off = dN1 - 
+            n * (1 + u) - 
+            (1 + u * (1 + u) * (7 + 4*u)) / 
+            ((1 + u) * (1 + 2 * u));
+        R = (1 - exp(-n) + 4*u*(n - 1 + exp(-n))/n)/(n + 2*u*n)
+    }
+    N1Par = (1 + u) / (1 - u)
+    
+    if (how == "product") {
+        t = 1:100
+        B = prod(1 + beta/W0 * N1Off * (exp(beta) * (1+u)/2)^(t - 1))
+        C = 1 - prod(1 + beta/W0 * N1Par * (exp(beta) * (1+u)/2)^(t - 1))
+    } else if (how == "sum") {
+        B = 1 + beta/W0 * N1Off * 2/(2 - exp(beta) * (1 + u))
+        C = -beta/W0 * N1Par * 2/(2 - exp(beta) * (1 + u))
+    } else if (how == "simple") {
+        if (mode == "private") {
+            R = 1
+            B = 1
+            C = 2*u
+        } else {
+            R = (1 - exp(-n_avg)) / n_avg
+            # Can use the below, but the improvement is small.
+            # R = (1 - exp(-n) + 4*u*(n - 1 + exp(-n))/n)/(n + 2*u*n)
+            B = 1
+            C = 2 * u
+        }
+    }
+
+    list(R = R, B = B, C = C)
 }
