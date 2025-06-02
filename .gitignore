@@ -6,11 +6,10 @@
 .httr-oauth
 .DS_Store
 
-/*.docx
-/*.pdf
 /Figures/
 /Old/
 /Readings/
+/PNAS submission/
 /Transposon library.Data/
 /Transposon Library.enl
 
@@ -21,8 +20,11 @@ Build/*
 /TE/te
 /TE/Runs/0-*
 
+*.docx
+*.pdf
 *.o
 *.so
 *.dll
 *.d
 *.d.x
+*conflicted copy*

@@ -462,7 +462,8 @@ pC = ggplot() +
     scale_y_log10(breaks = c(0.05, 0.1, 0.2, 0.5, 1.0)) +
     scale_x_continuous(breaks = c(0, 50, 100, 150, 200, 250, 300))
 
-pp = cowplot::plot_grid(pA, pB, pC, ncol = 1, labels = LETTERS[1:3], label_size = 8)
+# Note - switched order of these panels to match order in text.
+pp = cowplot::plot_grid(pC, pA, pB, ncol = 1, labels = LETTERS[1:3], label_size = 8)
 
 ggsave("./Figures/S-dongroth.pdf", pp, width = 8, height = 16, units = "cm", useDingbats = FALSE)
 ggsave("./Figures/S-dongroth.png", pp, width = 8, height = 16, units = "cm")

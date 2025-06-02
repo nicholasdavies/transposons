@@ -409,7 +409,7 @@ get_RBC = function(u, cost, simulate = FALSE, how = "product", mode = "private")
             B = 1
             C = 2*u
         } else {
-            R = (1 - exp(-n_avg)) / n_avg
+            R = 1 / n_avg
             # Can use the below, but the improvement is small.
             # R = (1 - exp(-n) + 4*u*(n - 1 + exp(-n))/n)/(n + 2*u*n)
             B = 1

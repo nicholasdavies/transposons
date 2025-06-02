@@ -388,7 +388,7 @@ for (cexp in seq(-6.0, -4.6, 0.1)) {
             u = uniroot(test_evolve, interval, cost = cost, simulate = TRUE, how = "product", mode = "public")$root);
 }
 
-for (cexp in c(seq(-4.5, -2.4, 0.1)) {
+for (cexp in seq(-4.5, -2.4, 0.1)) {
     cat("\n", cexp, "\n")
     cost = 5 * 10^cexp;
     interval = c(0.5 * sqrt(cost), sqrt(cost)); # Empirically, this works well to limit the search area

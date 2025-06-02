@@ -529,7 +529,6 @@ ggplot(DA[mode == "pub" | variable == "B^{Pri}"]) +
 ggsave("./Figures/S-RBCapprox.pdf", width = 16, height = 12, units = "cm", useDingbats = FALSE)
 
 
-prod(1 + exp(-1:-1000))
 
 
 
