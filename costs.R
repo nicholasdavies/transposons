@@ -1,11 +1,59 @@
 library(data.table)
 library(rlang)
 library(ggplot2)
+library(ggrepel)
 library(scales)
 library(cowplot)
 library(cmocean)
+library(stringr)
 
-theme_set(theme_cowplot(font_size = 8) + theme(plot.title = element_text(size = 8, face = "plain"), strip.background = element_blank()))
+source("./load_ngd.R")
+source("./shared.R")
+
+# Plot setup
+theme_set(theme_cowplot(font_size = 8) + 
+        theme(plot.title = element_text(size = 8, face = "plain"), strip.background = element_blank()))
+
+my_colours = c(
+    "Transcription and translation" =  "#6d2f20",
+    "Protein aggregation" =            "#b75347",
+    "DNA synthesis" =                  "#e09351",
+    "Double-stranded breaks" =         "#edc775",
+    "Deleterious insertions" =         "#94b594",
+    "Deleterious insertions, 1-site" = "#94b594",
+    "Deleterious insertions, 2-site" = "#94b594",
+    "Ectopic recombination" =          "#224b5e",
+    "Combined" =                       "#000000",
+    "Combined (RNA)" =                 "#000000",
+    "Combined (RNA), 1-site" =         "#000000",
+    "Combined (RNA), 2-site" =         "#000000",
+    "Combined (DNA)" =                 "#000000",
+    "Combined (DNA), 1-site" =         "#000000",
+    "Combined (DNA), 2-site" =         "#000000"
+)
+
+my_levels = names(my_colours)
+my_levels_order = c(
+    "Ectopic recombination",
+    "Deleterious insertions",
+    "Deleterious insertions, 1-site",
+    "Deleterious insertions, 2-site",
+    "DNA synthesis",
+    "Double-stranded breaks",
+    "Transcription and translation",
+    "Protein aggregation",
+    "Combined",
+    "Combined (RNA)",
+    "Combined (RNA), 1-site",
+    "Combined (RNA), 2-site",
+    "Combined (DNA)",
+    "Combined (DNA), 1-site",
+    "Combined (DNA), 2-site"
+)
+
+my_linetypes = c(rep("solid", length(my_colours) - 7), rep("21", 7))
+names(my_linetypes) = names(my_colours)
+
 
 # Empirically measured copy number & transposition rates
 nuzhdin_mackay = fread(
@@ -54,6 +102,8 @@ empirical = rbind(
 
 empirical[u_central != 0, type := "full"]
 empirical[u_central == 0, type := "upper"]
+
+empirical[type == "full", u_rank := rank(u_central)]
 
 merge_all = function(dts) {
     Reduce(function(...) merge(..., all = TRUE, by = c("form", "u_minus_v")), dts)
@@ -236,48 +286,33 @@ dt[n0.1 == 0, w0.1 := 1]
 dt[n1 == 0, w1 := 1]
 dt[n10 == 0, w10 := 1]
 
-
-dt[, form := factor(form, levels = c(
-    "Transcription and translation",
-    "Protein aggregation",
-    "DNA synthesis",
-    "Double-stranded breaks",
-    "Deleterious insertions",
-    "Ectopic recombination",
-    "Combined (RNA)"))]
-
-my_colours = c(
-"Transcription and translation" =  "#6d2f20",
-"Protein aggregation" =            "#b75347",
-"DNA synthesis" =                  "#e09351",
-"Double-stranded breaks" =         "#edc775",
-"Deleterious insertions" =         "#94b594",
-"Ectopic recombination" =          "#224b5e",
-"Combined (RNA)" =                 "#000000"
-)
-
-my_linetypes = c(rep("solid", length(my_colours) - 1), rep("21", 1))
-names(my_linetypes) = names(my_colours)
+dt[, form := factor(form, levels = my_levels)]
 
 empirical[type == "upper", u_central := 1e-6]
 empirical[type == "upper", u_lo := 1e-6]
 
+set.seed(42)
 cost_plot = ggplot(dt) +
-    geom_line(aes(u_minus_v, n1, colour = form, linetype = form), size = 0.75) +
+    geom_line(aes(u_minus_v, n1, colour = form, linetype = form), linewidth = 0.75) +
     geom_pointrange(data = empirical[type == "full"], 
-        aes(xmin = u_lo, xmax = u_hi, x = u_central, y = n_het * 2), fatten = 1, size = 0.25, shape = 18) +
+        aes(xmin = u_lo, xmax = u_hi, x = u_central, y = n_het * 2), size = 0.2, linewidth = 0.25, shape = 18) +
+    geom_text_repel(data = empirical[type == "full"], 
+        aes(x = u_central, y = n_het * 2, label = u_rank), size = 2,
+        min.segment.length = 0, direction = "y", force = 25, segment.size = 0.25, segment.linetype = "dotted") +
     # geom_pointrange(data = empirical[type == "upper"],
-    #     aes(xmin = u_lo, xmax = u_hi, x = u_central, y = n_het * 2), fatten = 1, size = 0.25, shape = 18, colour = "#666666") +
+    #     aes(xmin = u_lo, xmax = u_hi, x = u_central, y = n_het * 2), size = 0.4, linewidth = 0.25, shape = 18, colour = "#666666") +
     scale_x_log10(limits = c(7.8e-7, 1), breaks = 10^(-6:0), labels = trans_format("log10", math_format(10^.x)), expand = expansion(mult = c(0.01, 0.02))) +
     scale_y_log10(limits = c(6e-1, 1.7e12), breaks = 10^seq(0, 12, by = 2), labels = trans_format("log10", math_format(10^.x)), expand = expansion(mult = c(0.01, 0.05))) +
     scale_colour_manual(values = my_colours) +
     scale_linetype_manual(values = my_linetypes) +
     labs(x = "Duplication rate", y = "Equilibrium copy number", colour = "Fitness cost", linetype = "Fitness cost") +
-    theme(legend.position = c(0.55, 0.87), legend.title = element_text(size = 7, margin = margin(0, 0, -3, 0)), 
-        plot.margin = margin(2, 0, 0, 3),
+    theme(legend.position = c(0.55, 0.87), legend.title = element_text(size = 7, margin = margin(0, 0, 3, 0)), 
+        plot.margin = margin(2, 2, 0, 3),
         legend.text = element_text(size = 6), legend.key.height = unit(0.12, "cm"),
         axis.title.y = element_text(margin = margin(0, -2, 0, 0)))
 
+ggsave("./Figures/S-costs.pdf", cost_plot, width = 10, height = 10, units = "cm", useDingbats = FALSE)
+ggsave("./Figures/S-costs.png", cost_plot, width = 10, height = 10, units = "cm")
 
 
 
@@ -286,10 +321,8 @@ cost_plot = ggplot(dt) +
 ##################
 
 # Cost simulations
-source("./load_ngd.R")
-library(stringr)
 
-load_set = function(file_pattern, cost_type, path = "./TE/Runs/2-Cost/", summarize = TRUE)
+load_set = function(file_pattern, cost_type, path = "./TE/Runs/2-Cost/", summarize = TRUE, last_g = 21000, over = 100)
 {
     fp = paste0("^", str_replace_all(file_pattern, "\\*", "([0-9]+[kmgKMG]?)"), "$")
     files = list.files(path = path, pattern = fp)
@@ -301,7 +334,20 @@ load_set = function(file_pattern, cost_type, path = "./TE/Runs/2-Cost/", summari
     for (f in seq_along(files)) {
         d = load_ngd(files[f], thin = 1, gunit = 1)
         if (summarize) {
-            d = d[, .(extinction = tail(w,1) <= 1e-6, w = tail(w, 1), n = tail(n, 1), u = tail(u, 1)), by = run]
+            if (d[, tail(g, 1)] == last_g) {
+                cat("Averaging for", files[f], "\n")
+                d = d[, .(extinction = tail(w, 1) <= 1e-6, 
+                    w = mean(tail(w, over)), 
+                    n = mean(tail(n, over)), 
+                    u = mean(tail(u, over)),
+                    g = tail(g, 1)), by = run]
+            } else {
+                d = d[, .(extinction = tail(w, 1) <= 1e-6, 
+                    w = tail(w, 1), 
+                    n = tail(n, 1), 
+                    u = tail(u, 1),
+                    g = tail(g, 1)), by = run]
+            }
         }
         d[, cost := measures[f]]
         d[, cost_type := cost_type]
@@ -312,65 +358,18 @@ load_set = function(file_pattern, cost_type, path = "./TE/Runs/2-Cost/", summari
     if (summarize) {
         all_data = all_data[order(cost, run)]
     }
+    
+    all_data[cost_type == "Transcription and translation",  standard_cost := 10] # k = 10
+    all_data[cost_type == "Protein aggregation",            standard_cost := 10] # k = 10
+    all_data[cost_type == "DNA synthesis",                  standard_cost := 5000] # 5 kb
+    all_data[cost_type == "Double-stranded breaks",         standard_cost := 10] # j = 10
+    all_data[cost_type %like% "^Deleterious insertions",    standard_cost := 1] # s = 0.01 (1%)
+    all_data[cost_type == "Ectopic recombination",          standard_cost := 1] # 1 cM/Mb
+    all_data[cost_type %like% "^Combined",                  standard_cost := 1] # 1 unit
+    all_data[, rel_cost := cost / standard_cost]
+
     return (all_data)
 }
-
-############################
-# THEORETICAL ILLUSTRATION #
-############################
-
-du = load_set("theorN_*.ngd", "Public replication", summarize = FALSE);
-dl = load_set("theorN_*.ngd", "Private replication", summarize = FALSE);
-dh = load_set("theorNHigh_*.ngd", "Private replication, increased cost", summarize = FALSE);
-da = load_set("theorA_*.ngd", "Private replication, activity cost", summarize = FALSE);
-
-plot_triad = function(dl, x_labels, y_labels, title, legend, nymin, nymax, nlabs)
-{
-    d = dl[order(cost)];
-    d[, costf := factor(cost, levels = unique(cost))];
-    d[, g := g / 1000];
-    
-    nbreaks = nlabs;
-    nlabels = sapply(nlabs, function(x) sprintf("%g", x));
-    oceanname = "haline";
-    
-    plN = ggplot(d) +
-        geom_line(aes(x = g, y = n, group = interaction(run, costf), colour = costf), size = 0.25) +
-        geom_vline(xintercept = 1, linetype = "dashed", size = 0.25) +
-        scale_y_log10(limits = c(nymin, nymax), breaks = nbreaks, labels = nlabels) +
-        scale_x_continuous(limits = c(0, 21), expand = expansion(c(0.04, 0))) +
-        scale_colour_cmocean(discrete = TRUE, name = oceanname, end = 0.92) + 
-        theme(legend.position = if (legend) c(0.5, 0.6) else "none", legend.title = element_text(size = 7, margin = margin(0, 0, -3, 0)),
-            legend.text = element_text(size = 6), legend.key.height = unit(0.12, "cm"), plot.margin = margin(2, 0, 0, 1),
-            axis.text = element_text(size = 6)) +
-        labs(x = NULL, y = if (y_labels) "Copy number" else NULL, title = title, colour = expression("Cost," ~ italic(q)))
-
-    plU = ggplot(d) +
-        geom_line(aes(x = g, y = u, group = interaction(run, costf), colour = costf), size = 0.25) +
-        geom_vline(xintercept = 1, linetype = "dashed", size = 0.25) +
-        scale_y_log10(limits = c(0.001, 1), breaks = c(0.001, 0.01, 0.1, 1), labels = c("0.001", "0.01", "0.1", "1")) +
-        scale_x_continuous(limits = c(0, 21), expand = expansion(c(0.04, 0))) +
-        scale_colour_cmocean(discrete = TRUE, name = oceanname, end = 0.92) + 
-        theme(legend.position = "none", plot.margin = margin(2, 0, 0, 1),
-            axis.text = element_text(size = 6)) +
-        labs(x = NULL, y = if (y_labels) "Duplication rate" else NULL)
-
-    plW = ggplot(d) +
-        geom_line(aes(x = g, y = w, group = interaction(run, costf), colour = costf), size = 0.25) +
-        geom_vline(xintercept = 1, linetype = "dashed", size = 0.25) +
-        scale_y_continuous(limits = c(0, 1)) +
-        scale_x_continuous(limits = c(0, 21), expand = expansion(c(0.04, 0))) +
-        scale_colour_cmocean(discrete = TRUE, name = oceanname, end = 0.92) + 
-        theme(legend.position = "none", plot.margin = margin(2, 0, 0, 1),
-            axis.text = element_text(size = 6)) +
-        labs(x = if (x_labels) "Generations (thousands)" else "", y = if (y_labels) "Host fitness" else NULL)
-    
-    plot_grid(plN, plU, plW, ncol = 1, align = "v", axis = "b", rel_heights = c(1.25, 0.7, 0.9))
-}
-
-pL = plot_triad(dl, FALSE, TRUE,  "Moderate copy-\nnumber cost",  TRUE,  0.03, 10000, c(0.1, 1, 10, 100, 1000, 10000))
-pH = plot_triad(dh, TRUE, FALSE,  "High copy-\nnumber cost", FALSE, 0.03, 10000, c(0.1, 1, 10, 100, 1000, 10000))
-pE = plot_triad(da, FALSE, FALSE, "Moderate\nactivity cost",      FALSE, 0.03, 10000, c(0.1, 1, 10, 100, 1000, 10000))
 
 #######################
 # FIG 2 FOR MAIN TEXT #
@@ -429,33 +428,20 @@ costs = rbind(
 costs[n >= 10000, extinction := TRUE]
 costs[extinction == TRUE, w := 0]
 
-costs[cost_type == "Transcription and translation", standard_cost := 10] # k = 10
-costs[cost_type == "Protein aggregation",           standard_cost := 10] # k = 10
-costs[cost_type == "DNA synthesis",                 standard_cost := 5000] # 5 kb
-costs[cost_type == "Double-stranded breaks",        standard_cost := 10] # j = 10
-costs[cost_type == "Deleterious insertions",        standard_cost := 1] # s = 0.01 (1%)
-costs[cost_type == "Ectopic recombination",         standard_cost := 1] # 1 cM/Mb
-costs[cost_type == "Combined (RNA)",                standard_cost := 1] # 1 unit
-costs[, rel_cost := cost / standard_cost]
-
 csumm = costs[
     cost_type != "Double-stranded breaks",
-    # cost_type != "Combined (RNA)", 
-    .(w = mean(w), n = mean(n), u = mean(u)), keyby = .(cost_type, standard_cost, rel_cost)]
+    .(w = mean(w), n = mean(n), u = mean(u), g = mean(g)), keyby = .(cost_type, standard_cost, rel_cost)]
 
-csumm[, cost_type := factor(cost_type, levels = c(
-    "Ectopic recombination",
-    "Deleterious insertions",
-    "DNA synthesis",
-    "Transcription and translation",
-    "Protein aggregation",
-    "Combined (RNA)"
-    ))]
+csumm[, cost_type := factor(cost_type, my_levels_order)]
 
 csumm = csumm[rel_cost >= 1]
 lastp = csumm[rel_cost <= 10^7, .(rel_cost = max(rel_cost)), keyby = cost_type]
+csumm_pri = csumm
+csumm_pri[, mode := "Private"]
+lastp_pri = lastp
+lastp_pri[, mode := "Private"]
 
-w_plot = ggplot(csumm[rel_cost >= 1]) +
+w_plot_pri = ggplot(csumm[rel_cost >= 1]) +
     geom_point(aes(x = rel_cost, y = w, colour = cost_type), size = 0.6) +
     geom_line(aes(x = rel_cost, y = w, colour = cost_type, linetype = cost_type), size = 0.6) +
     geom_segment(data = lastp, aes(x = rel_cost, xend = 10^7, y = 1, yend = 1, colour = cost_type, linetype = cost_type), size = 0.6) +
@@ -467,37 +453,16 @@ w_plot = ggplot(csumm[rel_cost >= 1]) +
     labs(x = "Relative cost increase", y = "Equilibrium host fitness") +
     theme(legend.position = "none", panel.background = element_rect(fill = "#f4f4f4"), panel.grid.major = element_line(colour = "white"))
 
-f2 = plot_grid(fcc, w_plot, nrow = 1, rel_widths = c(15, 5), 
+f2 = plot_grid(fcc, w_plot_pri, nrow = 1, rel_widths = c(15, 5), 
     labels = c("C", "D"), label_size = 8)
 
 ggsave("./Figures/2-costs-plots.pdf", f2, width = 20, height = 9, units = "cm", useDingbats = FALSE)
 ggsave("./Figures/2-costs-plots.png", f2, width = 20, height = 9, units = "cm")
 
 
-fSC = plot_grid(pL, pH, pE, cost_plot, nrow = 1, rel_widths = c(3.25, 2.85, 2.93, 7.5),
-    labels = LETTERS[1:4], label_size = 8, label_x = c(0.15, 0.07, 0.06, 0), label_y = 1.004)
-
-ggsave("./Figures/S1-costs.pdf", fSC, width = 16.5, height = 7.5, units = "cm", useDingbats = FALSE)
-ggsave("./Figures/S1-costs.png", fSC, width = 16.5, height = 7.5, units = "cm")
-
 ################
 # FOR SUPP MAT #
 ################
-
-my_colours = c(
-"Transcription and translation" =  "#6d2f20",
-"Protein aggregation" =            "#b75347",
-"DNA synthesis" =                  "#e09351",
-"Double-stranded breaks" =         "#edc775",
-"Deleterious insertions, 1-site" = "#94b594",
-"Deleterious insertions, 2-site" = "#94b594",
-"Ectopic recombination" =          "#224b5e",
-"Combined (RNA), 1-site" =         "#000000",
-"Combined (RNA), 2-site" =         "#000000"
-)
-
-my_linetypes = c(rep("solid", length(my_colours) - 3), rep("21", 3))
-names(my_linetypes) = names(my_colours)
 
 costs = rbind(
     load_set("exp_k*.ngd", "Transcription and translation"),
@@ -514,37 +479,15 @@ costs = rbind(
 costs[n >= 10000, extinction := TRUE]
 costs[extinction == TRUE, w := 0]
 
-costs[cost_type == "Transcription and translation",  standard_cost := 10] # k = 10
-costs[cost_type == "Protein aggregation",            standard_cost := 10] # k = 10
-costs[cost_type == "DNA synthesis",                  standard_cost := 5000] # 5 kb
-costs[cost_type == "Double-stranded breaks",         standard_cost := 10] # j = 10
-costs[cost_type == "Deleterious insertions, 1-site", standard_cost := 1] # s = 0.01 (1%)
-costs[cost_type == "Deleterious insertions, 2-site", standard_cost := 1] # s = 0.01 (1%)
-costs[cost_type == "Ectopic recombination",          standard_cost := 1] # 1 cM/Mb
-costs[cost_type == "Combined (RNA), 1-site",         standard_cost := 1] # 1 unit
-costs[cost_type == "Combined (RNA), 2-site",         standard_cost := 1] # 1 unit
-costs[, rel_cost := cost / standard_cost]
-
-
 csumm = costs[,
     .(w = mean(w), n = mean(n), u = mean(u)), keyby = .(cost_type, standard_cost, rel_cost)]
 
-csumm[, cost_type := factor(cost_type, levels = c(
-    "Transcription and translation",
-    "Protein aggregation",
-    "DNA synthesis",
-    "Double-stranded breaks",
-    "Deleterious insertions, 1-site",
-    "Deleterious insertions, 2-site",
-    "Ectopic recombination",
-    "Combined (RNA), 1-site",
-    "Combined (RNA), 2-site"
-    ))]
+csumm[, cost_type := factor(cost_type, my_levels_order)]
 
 csumm = csumm[rel_cost >= 1]
 lastp = csumm[rel_cost <= 10^7, .(rel_cost = max(rel_cost)), keyby = cost_type]
 
-w_plot = ggplot(csumm[rel_cost >= 1]) +
+w_plot_pri2 = ggplot(csumm[rel_cost >= 1]) +
     geom_point(aes(x = rel_cost, y = w, colour = cost_type), size = 0.6) +
     geom_line(aes(x = rel_cost, y = w, colour = cost_type, linetype = cost_type), size = 0.6) +
     geom_segment(data = lastp, aes(x = rel_cost, xend = 10^7, y = 1, yend = 1, colour = cost_type, linetype = cost_type), size = 0.6) +
@@ -557,7 +500,7 @@ w_plot = ggplot(csumm[rel_cost >= 1]) +
     theme(legend.position = "none", panel.background = element_rect(fill = "#f4f4f4"), panel.grid.major = element_line(colour = "white"),
         panel.spacing.y = unit(0, "cm"), axis.text = element_text(size = 6), strip.text = element_text(size = 6))
 
-n_plot = ggplot(csumm[rel_cost >= 1 & w > 0 & w < 1]) +
+n_plot_pri2 = ggplot(csumm[rel_cost >= 1 & w > 0 & w < 1]) +
     geom_point(aes(x = rel_cost, y = n, colour = cost_type), size = 0.6) +
     geom_line(aes(x = rel_cost, y = n, colour = cost_type, linetype = cost_type), size = 0.6) +
     facet_wrap(~cost_type, ncol = 1, drop = FALSE) +
@@ -569,7 +512,7 @@ n_plot = ggplot(csumm[rel_cost >= 1 & w > 0 & w < 1]) +
     theme(legend.position = "none", panel.background = element_rect(fill = "#f4f4f4"), panel.grid.major = element_line(colour = "white"),
         panel.spacing.y = unit(0, "cm"), axis.text = element_text(size = 6), strip.text = element_text(size = 6))
 
-u_plot = ggplot(csumm[rel_cost >= 1 & w > 0 & w < 1]) +
+u_plot_pri2 = ggplot(csumm[rel_cost >= 1 & w > 0 & w < 1]) +
     geom_point(aes(x = rel_cost, y = u, colour = cost_type), size = 0.6) +
     geom_line(aes(x = rel_cost, y = u, colour = cost_type, linetype = cost_type), size = 0.6) +
     facet_wrap(~cost_type, ncol = 1, drop = FALSE) +
@@ -581,7 +524,162 @@ u_plot = ggplot(csumm[rel_cost >= 1 & w > 0 & w < 1]) +
     theme(legend.position = "none", panel.background = element_rect(fill = "#f4f4f4"), panel.grid.major = element_line(colour = "white"),
         panel.spacing.y = unit(0, "cm"), axis.text = element_text(size = 6), strip.text = element_text(size = 6))
 
-fSC = plot_grid(w_plot, n_plot, u_plot, nrow = 1, rel_widths = c(4, 4, 4), labels = LETTERS[1:3], label_size = 8)
+fSC = plot_grid(w_plot_pri2, n_plot_pri2, u_plot_pri2, nrow = 1, rel_widths = c(4, 4, 4), labels = LETTERS[1:3], label_size = 8)
 
 ggsave("./Figures/supp-costs-full.pdf", fSC, width = 16, height = 14, units = "cm", useDingbats = FALSE)
 ggsave("./Figures/supp-costs-full.png", fSC, width = 16, height = 14, units = "cm")
+
+
+#############################
+# FOR SUPP MAT - PUBLIC TEs #
+#############################
+
+costs = rbind(
+    load_set("exp_k*.ngd", "Transcription and translation", path = "./TE/Runs/2B-CostPublic/"),
+    load_set("mis_k*.ngd", "Protein aggregation", path = "./TE/Runs/2B-CostPublic/"),
+    load_set("syn_*b.ngd", "DNA synthesis", path = "./TE/Runs/2B-CostPublic/"),
+    load_set("dsb_*.ngd",  "Double-stranded breaks", path = "./TE/Runs/2B-CostPublic/"),
+    load_set("ins_s*.ngd", "Deleterious insertions, 1-site", path = "./TE/Runs/2B-CostPublic/"),
+    load_set("ins2_s*.ngd", "Deleterious insertions, 2-site", path = "./TE/Runs/2B-CostPublic/"),
+    load_set("ect_*cMMb.ngd", "Ectopic recombination", path = "./TE/Runs/2B-CostPublic/"),
+    load_set("com_*.ngd", "Combined (DNA)", path = "./TE/Runs/2B-CostPublic/")
+)
+
+costs[n >= 9500, extinction := TRUE] # Public TEs reproduce so slowly that they may hit the 10,000 cutoff without going extinct.
+costs[extinction == TRUE, w := 0]
+
+csumm = costs[, 
+    .(w = mean(w), n = mean(n), u = mean(u), g = mean(g)), keyby = .(cost_type, standard_cost, rel_cost)]
+
+csumm[, cost_type := factor(cost_type, my_levels_order)]
+
+csumm = csumm[rel_cost >= 1]
+lastp = csumm[rel_cost <= 10^7, .(rel_cost = max(rel_cost)), keyby = cost_type]
+csumm_pub = csumm
+csumm_pub[, mode := "Public"]
+lastp_pub = lastp
+lastp_pub[, mode := "Public"]
+
+costs = rbind(
+    load_set("exp_k*.ngd", "Transcription and translation"),
+    load_set("mis_k*.ngd", "Protein aggregation"),
+    load_set("syn_*b.ngd", "DNA synthesis"),
+    load_set("dsb_*.ngd",  "Double-stranded breaks"),
+    load_set("ins_s*.ngd", "Deleterious insertions, 1-site"),
+    load_set("ins2_s*.ngd", "Deleterious insertions, 2-site"),
+    load_set("ect_*cMMb.ngd", "Ectopic recombination"),
+    load_set("com_*.ngd", "Combined (RNA)")
+)
+
+costs[n >= 10000, extinction := TRUE]
+costs[extinction == TRUE, w := 0]
+
+csumm = costs[
+    cost_type != "Double-stranded breaks",
+    .(w = mean(w), n = mean(n), u = mean(u), g = mean(g)), keyby = .(cost_type, standard_cost, rel_cost)]
+
+csumm[, cost_type := factor(cost_type, my_levels_order)]
+
+csumm = csumm[rel_cost >= 1]
+lastp = csumm[rel_cost <= 10^7, .(rel_cost = max(rel_cost)), keyby = cost_type]
+csumm_pri = csumm
+csumm_pri[, mode := "Private"]
+lastp_pri = lastp
+lastp_pri[, mode := "Private"]
+
+w_plot_pri = ggplot(rbind(csumm_pri[rel_cost >= 1], data.table(cost_type = "Double-stranded breaks", rel_cost = 1, w = -1, n = -1, u = -1, mode = "Private"), fill = TRUE)) +
+    geom_point(aes(x = rel_cost, y = w, colour = cost_type), size = 0.6) +
+    geom_line(aes(x = rel_cost, y = w, colour = cost_type, linetype = cost_type), size = 0.6) +
+    geom_segment(data = lastp_pri, aes(x = rel_cost, xend = 10^7, y = 1, yend = 1, colour = cost_type, linetype = cost_type), size = 0.6) +
+    facet_wrap(~cost_type, ncol = 1) +
+    scale_x_log10(limits = c(1, 1e7), breaks = 10^(0:7), labels = trans_format("log10", math_format(10^.x)), expand = expansion(c(0.01, 0.02))) +
+    scale_y_continuous(expand = expansion(0.03), limits = c(0, 1), breaks = (0:4)/4, labels = c("0", "", ".5", "", "1")) +
+    scale_colour_manual(values = my_colours) +
+    scale_linetype_manual(values = my_linetypes) +
+    labs(x = "Relative cost increase", y = "Equilibrium host fitness", title = "Private replication") +
+    theme(legend.position = "none", panel.background = element_rect(fill = "#f4f4f4"), panel.grid.major = element_line(colour = "white")) +
+    theme(strip.text.y = element_text(angle = 90))
+
+w_plot_pub = ggplot(csumm_pub[rel_cost >= 1]) +
+    geom_point(aes(x = rel_cost, y = w, colour = cost_type), size = 0.6) +
+    geom_line(aes(x = rel_cost, y = w, colour = cost_type, linetype = cost_type), size = 0.6) +
+    geom_segment(data = lastp_pub, aes(x = rel_cost, xend = 10^7, y = 1, yend = 1, colour = cost_type, linetype = cost_type), size = 0.6) +
+    facet_wrap(~cost_type, ncol = 1) +
+    scale_x_log10(limits = c(1, 1e7), breaks = 10^(0:7), labels = trans_format("log10", math_format(10^.x)), expand = expansion(c(0.01, 0.02))) +
+    scale_y_continuous(expand = expansion(0.03), limits = c(0, 1), breaks = (0:4)/4, labels = c("0", "", ".5", "", "1")) +
+    scale_colour_manual(values = my_colours) +
+    scale_linetype_manual(values = my_linetypes) +
+    labs(x = "Relative cost increase", y = "Equilibrium host fitness", title = "Public replication") +
+    theme(legend.position = "none", panel.background = element_rect(fill = "#f4f4f4"), panel.grid.major = element_line(colour = "white")) +
+    theme(strip.text.y = element_text(angle = 90))
+
+ffit = plot_grid(w_plot_pub, w_plot_pri, ncol = 2)
+
+ggsave("./Figures/S-fitness-costs.pdf", ffit, width = 15, height = 15, units = "cm", useDingbats = FALSE)
+ggsave("./Figures/S-fitness-costs.png", ffit, width = 15, height = 15, units = "cm")
+
+
+
+############################
+# THEORETICAL ILLUSTRATION #
+############################
+
+dn = load_set("theorN_*.ngd", "Moderate copy-number cost", summarize = FALSE);
+dN = load_set("theorNHigh_*.ngd", "High copy-number cost", summarize = FALSE);
+da = load_set("theorA_*.ngd", "Moderate activity cost", summarize = FALSE);
+dA = load_set("theorAHigh_*.ngd", "High activity cost", summarize = FALSE);
+
+plot_triad = function(dl, x_labels, y_labels, title, legend, nymin, nymax, nlabs)
+{
+    d = dl[order(cost)];
+    d[, costf := factor(cost, levels = unique(cost))];
+    d[, g := g / 1000];
+    
+    nbreaks = nlabs;
+    nlabels = sapply(nlabs, function(x) sprintf("%g", x));
+    oceanname = "haline";
+    
+    plN = ggplot(d) +
+        geom_line(aes(x = g, y = n, group = interaction(run, costf), colour = costf), size = 0.25) +
+        geom_vline(xintercept = 1, linetype = "dashed", size = 0.25) +
+        scale_y_log10(limits = c(nymin, nymax), breaks = nbreaks, labels = nlabels) +
+        scale_x_continuous(limits = c(0, 21), expand = expansion(c(0.04, 0))) +
+        scale_colour_cmocean(discrete = TRUE, name = oceanname, end = 0.92) + 
+        theme(legend.position = if (legend) c(0.5, 0.6) else "none", legend.title = element_text(size = 7, margin = margin(0, 0, -3, 0)),
+            legend.text = element_text(size = 6), legend.key.height = unit(0.12, "cm"), plot.margin = margin(2, 0, 0, 1),
+            axis.text = element_text(size = 6)) +
+        labs(x = NULL, y = if (y_labels) "Copy number" else NULL, title = title, colour = expression("Cost," ~ italic(q)))
+
+    plU = ggplot(d) +
+        geom_line(aes(x = g, y = u, group = interaction(run, costf), colour = costf), size = 0.25) +
+        geom_vline(xintercept = 1, linetype = "dashed", size = 0.25) +
+        scale_y_log10(limits = c(0.001, 1), breaks = c(0.001, 0.01, 0.1, 1), labels = c("0.001", "0.01", "0.1", "1")) +
+        scale_x_continuous(limits = c(0, 21), expand = expansion(c(0.04, 0))) +
+        scale_colour_cmocean(discrete = TRUE, name = oceanname, end = 0.92) + 
+        theme(legend.position = "none", plot.margin = margin(2, 0, 0, 1),
+            axis.text = element_text(size = 6)) +
+        labs(x = NULL, y = if (y_labels) "Duplication rate" else NULL)
+
+    plW = ggplot(d) +
+        geom_line(aes(x = g, y = w, group = interaction(run, costf), colour = costf), size = 0.25) +
+        geom_vline(xintercept = 1, linetype = "dashed", size = 0.25) +
+        scale_y_continuous(limits = c(0, 1)) +
+        scale_x_continuous(limits = c(0, 21), expand = expansion(c(0.04, 0))) +
+        scale_colour_cmocean(discrete = TRUE, name = oceanname, end = 0.92) + 
+        theme(legend.position = "none", plot.margin = margin(2, 0, 0, 1),
+            axis.text = element_text(size = 6)) +
+        labs(x = if (x_labels) "Generations (thousands)" else "", y = if (y_labels) "Host fitness" else NULL)
+    
+    plot_grid(plN, plU, plW, ncol = 1, align = "v", axis = "b", rel_heights = c(1.25, 0.7, 0.9))
+}
+
+pL = plot_triad(dn, FALSE, TRUE,  "Moderate copy-\nnumber cost",  TRUE,  0.03, 10000, c(0.1, 1, 10, 100, 1000, 10000))
+pH = plot_triad(dN, TRUE, FALSE,  "High copy-\nnumber cost", FALSE, 0.03, 10000, c(0.1, 1, 10, 100, 1000, 10000))
+pE = plot_triad(da, FALSE, FALSE, "Moderate\nactivity cost",      FALSE, 0.03, 10000, c(0.1, 1, 10, 100, 1000, 10000))
+pF = plot_triad(dA, FALSE, FALSE, "High\nactivity cost",      FALSE, 0.03, 10000, c(0.1, 1, 10, 100, 1000, 10000))
+
+fSC = plot_grid(pL, pH, pE, cost_plot, nrow = 1, rel_widths = c(3.25, 2.85, 2.93, 7.5),
+    labels = LETTERS[1:4], label_size = 8, label_x = c(0.15, 0.07, 0.06, 0), label_y = 1.004)
+
+ggsave("./Figures/S1-costs.pdf", fSC, width = 16.5, height = 7.5, units = "cm", useDingbats = FALSE)
+ggsave("./Figures/S1-costs.png", fSC, width = 16.5, height = 7.5, units = "cm")

@@ -7,9 +7,9 @@ OBJ := $(addprefix $(OBJDIR)/,$(notdir $(SRC:.cpp=.o)))
 DEP := $(OBJDIR)/depend.d
 DEPSRC := $(wildcard $(SRCDIR)/*.cpp) $(wildcard $(SRCDIR)/*.h) $(wildcard $(SRCDIR)/*.hpp)
 LANG = -std=c++14
-CFLAGS := -c -O3 -W -Wall -Werror -Wno-deprecated-declarations
-IFLAGS := -isystem /usr/local/include
-LFLAGS := -llua -L /usr/local/lib
+CFLAGS := -c -O3 -W -Wall -Werror -Wno-unused-parameter -Wno-deprecated-declarations
+IFLAGS := -I/opt/homebrew/include
+LFLAGS := -llua -L/opt/homebrew/lib
 
 ifeq ($(DEBUG),1)
  CFLAGS := $(filter-out -s -fomit-frame-pointer -O3, $(CFLAGS)) -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -ggdb -DDEBUG

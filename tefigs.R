@@ -4,54 +4,9 @@ library(cowplot)
 library(scales)
 
 source("./load_ngd.R")
+source("./shared.R")
 theme_set(theme_cowplot(font_size = 8) + theme(plot.title = element_text(size = 8, face = "plain")))
 
-# colours
-cDup = "#7caf5c"
-cFit = "#59386c"
-cTE1 = "#802417"
-cTE2 = "#c06636"
-cTE3 = "#ce9344"
-cTE4 = "#e8b960"
-cTE5 = "#508ea2"
-cTE6 = "#17486f"
-cAct = "#447861"
-cPaf = "#b1a1cc";
-cSuf = "#738e8e";
-
-
-# Figure panel for TE dynamics
-panel = function(dt, y, ymin, ymax, ylim, colour, title = NULL, xlab = NULL, ylab = NULL, xlim = c(NA, NA), tx = TRUE)
-{
-    if (!is.vector(dt)) {
-        dt = list(dt)
-    }
-    
-    plot = ggplot();
-    
-    for (i in seq_along(y)) {
-        if (!is.na(ymin[i])) {
-            plot = plot + 
-                geom_ribbon(data = dt[[i]], aes_string(x = "g", ymin = ymin[i], ymax = ymax[i]), fill = colour[i], alpha = 0.4)
-        }
-        plot = plot +
-            geom_line(data = dt[[i]], aes_string(x = "g", y = y[i]), colour = colour[i])
-    }
-    
-    if (tx == FALSE) {
-        plot = plot + theme(axis.text.y = element_blank())
-    }
-    
-    plot +
-        scale_y_continuous(limits = ylim) +
-        scale_x_continuous(limits = xlim, expand = expansion(0.02)) +
-        labs(x = xlab, y = ylab, title = title)
-}
-
-vline = function(x)
-{
-     geom_vline(aes(xintercept = x), linetype = "dashed", size = 0.25)
-}
 
 ############
 # FIGURE 1 #
@@ -149,10 +104,10 @@ ggsave("./Figures/1-tragedy-plots.png", f2, width = 20, height = 8, units = "cm"
 ############
 
 # Load files
-s1 = load_ngd("./TE/Runs/5-Parasite/parasite_com_phi090_len05_u01.ngd");
-s2 = load_ngd("./TE/Runs/5-Parasite/parasite_com_phi100_len05_u01.ngd");
-s3 = load_ngd("./TE/Runs/3-Suppression/csupp_GN_co7_k100.ngd");
-s4 = load_ngd("./TE/Runs/3-Suppression/csupp_GP_co7_k100.ngd");
+s1 = load_ngd("./TE/Runs/5-Parasite/single_parasite_com_phi090_len05_u01.ngd");
+s2 = load_ngd("./TE/Runs/5-Parasite/single_parasite_com_phi100_len05_u01.ngd");
+s3 = load_ngd("./TE/Runs/3-Suppression/single_csupp_GN_co7_k100.ngd");
+s4 = load_ngd("./TE/Runs/3-Suppression/single_csupp_GP_co7_k100.ngd");
 
 # Process files
 s1[, n0 := nh0 + ng0]
@@ -235,8 +190,8 @@ f4 = plot_grid(f4a, NULL, f4b, NULL, f4c, NULL, f4d,
     draw_label("Generations (thousands)", x = 0.293, y = 0.03, hjust = 0.5, vjust = 0.5, size = 8, color = "#000000") +
     draw_label("Generations (thousands)", x = 0.793, y = 0.03, hjust = 0.5, vjust = 0.5, size = 8, color = "#000000")
 
-ggsave("./Figures/3-parasupp-plots.pdf", f4, width = 16.5, height = 8.5, units = "cm", useDingbats = FALSE)
-ggsave("./Figures/3-parasupp-plots.png", f4, width = 16.5, height = 8.5, units = "cm")
+ggsave("./Figures/3-parasupp-plots-new.pdf", f4, width = 16.5, height = 8.5, units = "cm", useDingbats = FALSE)
+ggsave("./Figures/3-parasupp-plots-new.png", f4, width = 16.5, height = 8.5, units = "cm")
 
 
 
@@ -252,7 +207,7 @@ load_parasites = function(len, u)
     filenames = paste0("./TE/Runs/5-Parasite/parasite_com_phi", phis, "_len", len, "_u", u, ".ngd");
     s = list();
     for (i in seq_along(phis)) {
-        s[[i]] = load_ngd(filenames[[i]], tag = as.numeric(phis[[i]])/100);
+        s[[i]] = load_ngd(filenames[[i]], tag = as.numeric(phis[[i]])/100, thin = 1);
     }
     s = rbindlist(s);
     
@@ -269,27 +224,84 @@ load_parasites = function(len, u)
     s[, p05 := ifelse(n0 == 0, NA_real_, tag * a105 / (100 + a105))]
     s[, p95 := ifelse(n0 == 0, NA_real_, tag * a195 / (100 + a195))]
     
+    # Info
+    s[, length := as.numeric(len)]
+    mu = as.numeric(paste0("0.", u))
+    s[, mu := mu]
+    
     return (s[])
 }
 
-paraplot = function(s, title, xmax = NA)
+# New design...
+ss = list(
+    load_parasites(len = "01", u = "01"),
+    load_parasites(len = "01", u = "001"),
+    load_parasites(len = "01", u = "0001"),
+    
+    load_parasites(len = "05", u = "01"),
+    load_parasites(len = "05", u = "001"),
+    load_parasites(len = "05", u = "0001"),
+    
+    load_parasites(len = "25", u = "01"),
+    load_parasites(len = "25", u = "001"),
+    load_parasites(len = "25", u = "0001")
+)
+ss = rbindlist(ss)
+s = ss[, lapply(.SD, last), by = .(run, phi = tag, mu, length)]
+
+s[, outcome := "Coexistence"]
+s[w == 1, outcome := "Elimination"]
+s[w < 1e-10, outcome := "Extinction"]
+s[, outcome := factor(outcome, c("Extinction", "Coexistence", "Elimination"))]
+
+s[, length_label := paste("list(Length, italic(lambda) ==", length, "~kb)")]
+s[, length_label := factor(length_label, unique(length_label))]
+s[, mu_label := sapply(mu, format, scientific = FALSE)]
+s[, table(mu_label)]
+s[, mu_label := paste0("list(Mutation~rate, italic(mu)[plain(u)] ==\"", mu_label, "\")")]
+s[, mu_label := factor(mu_label, unique(mu_label))]
+
+# Add asterisks
+annot = data.table(phi = c(0.5, 0.9, 0.96, 1), y = 0.2,
+    mu_label = s[mu_label %like% "0\\.001", mu_label[1]],
+    length_label = s[length_label %like% "5 ~kb", length_label[1]])
+
+para_sweep = ggplot(s) +
+    geom_bar(aes(x = as.factor(phi), fill = outcome), width = 0.5, colour = "black", linewidth = 0.1) +
+    geom_text(data = annot, aes(x = as.factor(phi), y = y), label = "*", size = 5) +
+    facet_grid(mu_label ~ length_label, labeller = label_parsed, switch = "y") +
+    scale_y_continuous(breaks = seq(0, 10, 2), expand = expansion(0, 0)) +
+    scale_fill_manual(values = c("#fdb", "#aca", "#69f")) +
+    labs(x = expression("Saturating probability of parasitism,"~italic(p)),
+        y = "Number of simulations", fill = "Outcome") +
+    theme(strip.placement = "outside", strip.background = element_blank(),
+        legend.position = "bottom", legend.justification = "center",
+        panel.grid.major.y = element_line(colour = "grey", linewidth = 0.2),
+        panel.spacing.y = unit(0.4, "cm"), strip.text = element_text(size = 8),
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+
+
+# Old design...
+
+paraplot = function(s, title, xmax = NA, umax = 0.3, nmax = 2000)
 {
     xadj = function()
         list(
             scale_x_continuous(limits = c(0, xmax), expand = expansion(0, 0)),
-            theme(panel.spacing = unit(0.7, "lines"), plot.margin = margin(4, 6, 4, 3, unit = "pt"))
+            theme(panel.spacing = unit(1.3, "lines"), plot.margin = margin(4, 9, 4, 3, unit = "pt"))
         )
     
     plot_grid(
         panel(list(s, s), c("n0", "n1"), c("n005", "n105"), c("n095", "n195"), 
-            c(0, 2000), c(cTE1, cTE5), ylab = "Copy\nnumber", title = title) + facet_wrap(~paste0("italic(p)==", tag), nrow = 1, labeller = label_parsed) + xadj(),
-        panel(s, "u0", "u005", "u095", c(0, 0.3), cDup, ylab = "Duplication\nrate") + facet_wrap(~paste0("p=", tag), nrow = 1) +
+            c(0, nmax), c(cTE1, cTE5), ylab = "Copy\nnumber", title = title) + 
+                facet_wrap(~paste0("italic(p)==", tag), nrow = 1, labeller = label_parsed) + xadj() + theme(strip.background = element_blank()),
+        panel(s, "u0", "u005", "u095", c(0, umax), cDup, ylab = "Duplication\nrate") + facet_wrap(~paste0("p=", tag), nrow = 1) +
             theme(strip.background = element_blank(), strip.text = element_blank()) + xadj(),
         panel(s, "p", "p05", "p95", c(0, 1), cPaf, ylab = "Parasitized\nfraction") + facet_wrap(~paste0("p=", tag), nrow = 1) +
             theme(strip.background = element_blank(), strip.text = element_blank()) + xadj(),
         panel(s, "w", "w05", "w95", c(0, 1), cFit, ylab = "Host\nfitness", xlab = "Generations (thousands)") + facet_wrap(~paste0("p=", tag), nrow = 1) +
             theme(strip.background = element_blank(), strip.text = element_blank()) + xadj(),
-        ncol = 1, align = "v", axis = "b", rel_heights = c(1.5, 1, 0.85, 1))
+        ncol = 1, align = "v", axis = "b", rel_heights = c(1.4, 1, 0.85, 1))
 }
 
 
@@ -306,13 +318,21 @@ ss = load_parasites(len = "25", u = "01")   # nothing
 ss = load_parasites(len = "25", u = "001")  # nothing
 ss = load_parasites(len = "25", u = "0001") # nothing
 
-s = load_parasites(len = "05", u = "001")
-sp1 = paraplot(s[tag < 0.945], "", 50)
-sp2 = paraplot(s[tag > 0.945], "", 50)
+se = load_parasites(len = "05", u = "001")
 
-sp = cowplot::plot_grid(sp1, sp2, nrow = 2)
-ggsave("./Figures/S-para.pdf", sp, width = 18, height = 20, units = "cm", useDingbats = FALSE)
-ggsave("./Figures/S-para.png", sp, width = 18, height = 20, units = "cm")
+# sp1 = paraplot(se[tag < 0.945], "", 100)
+# sp2 = paraplot(se[tag > 0.945], "", 100)
+# sp = cowplot::plot_grid(sp1, sp2, nrow = 2)
+# 
+# ggsave("./Figures/S-para-old.pdf", sp, width = 18, height = 20, units = "cm", useDingbats = FALSE)
+# ggsave("./Figures/S-para-old.png", sp, width = 18, height = 20, units = "cm")
+
+para_example = paraplot(se[tag %in% c(0.5, 0.9, 0.96, 1) & run == 1], NULL, 100, 1.5, 1500)
+
+para_both = cowplot::plot_grid(para_example, para_sweep, nrow = 2, rel_heights = c(1, 1.5), labels = LETTERS, label_size = 8)
+ggsave("./Figures/S-para.pdf", para_both, width = 18, height = 21.5, units = "cm", useDingbats = FALSE)
+ggsave("./Figures/S-para.png", para_both, width = 18, height = 21.5, units = "cm")
+
 
 
 #########################################
@@ -326,7 +346,7 @@ load_supps = function(type, cost, prefix = "csupp")
     su = list();
     for (i in seq_along(ks)) {
         if (file.exists(filenames[[i]])) {
-            su[[i]] = load_ngd(filenames[[i]], tag = as.numeric(ks[[i]]));
+            su[[i]] = load_ngd(filenames[[i]], tag = as.numeric(ks[[i]]), thin = 1);
         }
     }
     su = rbindlist(su);
@@ -336,8 +356,68 @@ load_supps = function(type, cost, prefix = "csupp")
     su[, s05 := S05 / (10 + S05)]
     su[, s95 := S95 / (10 + S95)]
     
+    # Info
+    su[, type := type]
+    su[, cost := paste0("10^-", cost)]
+    
     return (su[])
 }
+
+# New design...
+ss = list(
+    load_supps("GN", "7"),
+    load_supps("GN", "6"),
+    load_supps("GN", "5"),
+    load_supps("GP", "7"),
+    load_supps("GP", "6"),
+    load_supps("GP", "5")
+)
+ss = rbindlist(ss)
+s = ss[, lapply(.SD, last), by = .(run, tag, k = tag, type, cost)]
+
+
+ggplot(ss[type == "GN"]) +
+    geom_line(aes(g, w, group = run)) +
+    geom_point(data = s[type == "GN"], aes(g, w), colour = "red", size = 1) +
+    facet_grid(cost~tag) + labs(title = "GN")
+
+ggplot(ss[type == "GP"]) +
+    geom_line(aes(g, w, group = run)) +
+    geom_point(data = s[type == "GP"], aes(g, w), colour = "red", size = 1) +
+    facet_grid(cost~tag) + labs(title = "GP")
+
+
+
+s[, outcome := "Coexistence"]
+s[w == 1, outcome := "Elimination"]
+s[w < 1e-10, outcome := "Extinction"]
+s[, outcome := factor(outcome, c("Extinction", "Coexistence", "Elimination"))]
+
+s[, cost_label := paste0("list(Suppression~cost, italic(c)[S] == ", cost, ")")]
+s[, cost_label := factor(cost_label, unique(cost_label))]
+s[, type_label := ifelse(type == "GN", "Transcriptional~suppression", "Post-transcriptional~suppression")]
+s[, type_label := factor(type_label, unique(type_label))]
+
+# Add asterisks
+annot = data.table(k = rep(c(10, 1000), 2), y = 0.2,
+    type_label = rep(unique(s$type_label), each = 2),
+    cost_label = s[cost_label %like% "10\\^-7", cost_label[1]])
+
+supp_sweep = ggplot(s) +
+    geom_bar(aes(x = as.factor(k), fill = outcome), width = 0.5, colour = "black", linewidth = 0.1) +
+    geom_text(data = annot, aes(x = as.factor(k), y = y), label = "*", size = 5) +
+    facet_grid(type_label ~ cost_label, labeller = label_parsed, switch = "y") +
+    scale_y_continuous(breaks = seq(0, 10, 2), expand = expansion(0, 0)) +
+    scale_fill_manual(values = c("#fdb", "#aca", "#69f")) +
+    labs(x = expression("Particles per successful transposition,"~italic(k)),
+        y = "Number of simulations", fill = "Outcome") +
+    theme(strip.placement = "outside", strip.background = element_blank(),
+        legend.position = "bottom", legend.justification = "center",
+        panel.grid.major.y = element_line(colour = "grey", linewidth = 0.2),
+        panel.spacing.y = unit(0.4, "cm"), strip.text = element_text(size = 8))
+# 
+# ggsave("./Figures/S-supp-private.pdf", width = 22, height = 12, units = "cm", useDingbats = FALSE)
+# ggsave("./Figures/S-supp-private.png", width = 22, height = 12, units = "cm")
 
 supp_plot = function(s, title, nlim = c(0, 2000), alog = TRUE, alim = c(1e-3, 2e4), abreaks = c(1e-2, 1, 1e2, 1e4))
 {
@@ -351,10 +431,10 @@ supp_plot = function(s, title, nlim = c(0, 2000), alog = TRUE, alim = c(1e-3, 2e
         panel(s, "n", "n05", "n95", 
             nlim, cTE1, ylab = "Copy\nnumber", title = title, xlim = c(0, 50)) + 
             facet_wrap(~paste0("italic(k)==",tag), nrow = 1, labeller = label_parsed) +
-            theme(axis.text.x = element_blank()) + xadj(),
+            theme(strip.background = element_blank()) + xadj(),
         panel(list(s, s), c("U", "u"), c("U05", "u05"), c("U95", "u95"), c(0, 1), c(cAct, cDup), ylab = "Duplication\nrate", xlim = c(0, 50)) + 
             facet_wrap(~tag, nrow = 1) +
-            theme(strip.background = element_blank(), strip.text = element_blank(), axis.text.x = element_blank()) + xadj() +
+            theme(strip.background = element_blank(), strip.text = element_blank()) + xadj() +
             if (alog) {
                 scale_y_log10(limits = alim, breaks = abreaks, labels = trans_format("log10", math_format(10^.x)))
             } else {
@@ -362,7 +442,7 @@ supp_plot = function(s, title, nlim = c(0, 2000), alog = TRUE, alim = c(1e-3, 2e
             },
         panel(s, "s", "s05", "s95", c(0, 1), cSuf, ylab = "Suppressed  \nfraction", xlim = c(0, 50)) + 
             facet_wrap(~tag, nrow = 1) +
-            theme(strip.background = element_blank(), strip.text = element_blank(), axis.text.x = element_blank()) + xadj(),
+            theme(strip.background = element_blank(), strip.text = element_blank()) + xadj(),
         panel(s, "w", "w05", "w95", c(0, 1), cFit, ylab = "Host\nfitness", xlab = "Generations (thousands)", xlim = c(0, 50)) + 
             facet_wrap(~tag, nrow = 1) +
             theme(strip.background = element_blank(), strip.text = element_blank()) + xadj(),
@@ -386,42 +466,50 @@ sP7[, U05 := pmax(U05, 1e-3)]
 sP6[, U05 := pmax(U05, 1e-3)]
 sP5[, U05 := pmax(U05, 1e-3)]
 
-fsuppPr1 = plot_grid(
-    supp_plot(sN7, expression("Transcriptional suppression, suppression cost = 10"^-7)),
-    supp_plot(sN6, expression("Transcriptional suppression, suppression cost = 10"^-6)),
-    supp_plot(sN5, expression("Transcriptional suppression, suppression cost = 10"^-5)),
-    nrow = 3, ncol = 1, labels = LETTERS[1:3], label_size = 8
+# fsuppPr1 = plot_grid(
+#     supp_plot(sN7, expression("Transcriptional suppression, suppression cost = 10"^-7)),
+#     supp_plot(sN6, expression("Transcriptional suppression, suppression cost = 10"^-6)),
+#     supp_plot(sN5, expression("Transcriptional suppression, suppression cost = 10"^-5)),
+#     nrow = 3, ncol = 1, labels = LETTERS[1:3], label_size = 8
+# )
+# 
+# fsuppPr2 = plot_grid(
+#     supp_plot(sP7, expression("Post-transcriptional suppression, suppression cost = 10"^-7)),
+#     supp_plot(sP6, expression("Post-transcriptional suppression, suppression cost = 10"^-6)),
+#     supp_plot(sP5, expression("Post-transcriptional suppression, suppression cost = 10"^-5)),
+#     nrow = 3, ncol = 1, labels = LETTERS[1:3], label_size = 8
+# )
+
+supp_example = plot_grid(
+    supp_plot(sN7[tag %in% c(10, 1000) & run == 1], expression("Transcriptional suppression, suppression cost = 10"^-7)),
+    supp_plot(sP7[tag %in% c(10, 1000) & run == 1], expression("Post-transcriptional suppression, suppression cost = 10"^-7)),
+    nrow = 1, ncol = 2
 )
 
-fsuppPr2 = plot_grid(
-    supp_plot(sP7, expression("Post-transcriptional suppression, suppression cost = 10"^-7)),
-    supp_plot(sP6, expression("Post-transcriptional suppression, suppression cost = 10"^-6)),
-    supp_plot(sP5, expression("Post-transcriptional suppression, suppression cost = 10"^-5)),
-    nrow = 3, ncol = 1, labels = LETTERS[1:3], label_size = 8
-)
-
-ggsave("./Figures/S-supp-private-1.pdf", fsuppPr1, width = 14, height = 22, units = "cm", useDingbats = FALSE)
-ggsave("./Figures/S-supp-private-1.png", fsuppPr1, width = 14, height = 22, units = "cm")
-
-ggsave("./Figures/S-supp-private-2.pdf", fsuppPr2, width = 14, height = 22, units = "cm", useDingbats = FALSE)
-ggsave("./Figures/S-supp-private-2.png", fsuppPr2, width = 14, height = 22, units = "cm")
+supp_both = cowplot::plot_grid(supp_example, supp_sweep, nrow = 2, rel_heights = c(1.2, 1.5), labels = LETTERS, label_size = 8)
+ggsave("./Figures/S-supp.pdf", supp_both, width = 18, height = 21.5, units = "cm", useDingbats = FALSE)
+ggsave("./Figures/S-supp.png", supp_both, width = 18, height = 21.5, units = "cm")
 
 
 # Public elements suppression
-sp0 = load_supps("0", "NA", "pubsupp")
-# sp0 = load_supps("Null", "NA", "pubsupp")
-spN = load_supps("GN", "5", "pubsupp")
-spP = load_supps("GP", "5", "pubsupp")
+sp0 = load_supps("0", "NA", "pubsupp")[tag %in% c(1, 10000)]
+spN = load_supps("GN", "5", "pubsupp")[tag %in% c(1, 10000)]
+spP = load_supps("GP", "5", "pubsupp")[tag %in% c(1, 10000)]
 
 fsuppPu = plot_grid(
-    supp_plot(sp0, expression("No suppression"), nlim = c(0, 350), alog = FALSE, alim = c(0, 0.02), abreaks = waiver()),
-    supp_plot(spN, expression("Transcriptional suppression, cost = 10"^-5), nlim = c(0, 350), alog = FALSE, alim = c(0, 0.02), abreaks = waiver()),
-    supp_plot(spP, expression("Post-transcriptional suppression, cost = 10"^-5), nlim = c(0, 350), alog = FALSE, alim = c(0, 0.02), abreaks = waiver()),
-    nrow = 3, ncol = 1, labels = LETTERS[1:6], label_size = 8
+    plot_grid(
+        supp_plot(sp0[run == 2], expression("No suppression"), nlim = c(0, 350), alog = FALSE, alim = c(0, 0.02), abreaks = waiver()),
+        ggdraw(),
+        nrow = 1, ncol = 2, labels = c("A", ""), label_size = 8),
+    plot_grid(
+        supp_plot(spN[run == 2], expression("Transcriptional suppression, cost = 10"^-5), nlim = c(0, 350), alog = FALSE, alim = c(0, 0.02), abreaks = waiver()),
+        supp_plot(spP[run == 2], expression("Post-transcriptional suppression, cost = 10"^-5), nlim = c(0, 350), alog = FALSE, alim = c(0, 0.02), abreaks = waiver()),
+        nrow = 1, ncol = 2, labels = c("B", "C"), label_size = 8),
+    nrow = 2
 )
 
-ggsave("./Figures/S-supp-public.pdf", fsuppPu, width = 14, height = 22, units = "cm", useDingbats = FALSE)
-ggsave("./Figures/S-supp-public.png", fsuppPu, width = 14, height = 22, units = "cm")
+ggsave("./Figures/S-supp-public.pdf", fsuppPu, width = 18, height = 18, units = "cm", useDingbats = FALSE)
+ggsave("./Figures/S-supp-public.png", fsuppPu, width = 18, height = 18, units = "cm")
 
 
 
